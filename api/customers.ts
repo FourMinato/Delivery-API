@@ -38,7 +38,7 @@ router.get("/",(req, res) => {
 
 
 
-router.post("/register/user", async (req,res) => {
+router.post("/register", async (req,res) => {
     const {username , phone, email, password} = req.body
 
     if (!email || !password) {
