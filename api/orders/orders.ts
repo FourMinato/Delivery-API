@@ -13,8 +13,9 @@ export const router = express.Router();
 //สร้างรายการส่งสินค้า
 
 
-router.post('/create-delivery-order', upload.single('itemImage'), (req, res) => {
-    const { user_id, itemName, itemDescription, receiverPhone } = req.body;
+router.post('/create-delivery-order/:user_id', upload.single('itemImage'), (req, res) => {
+    const { user_id } = req.params;
+    const { itemName, itemDescription, receiverPhone } = req.body;
     const itemImage = req.file ? req.file.path : null;
 
     // ตรวจสอบข้อมูลที่จำเป็น
