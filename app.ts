@@ -2,6 +2,7 @@ import express from "express";
 import { router as index } from "./api/index";
 import { router as customers } from "./api/customers";
 import { router as order } from "./api/orders/orders";
+import { router as rider } from "./api/rider/rider";
 import bodyParser from "body-parser";
 
 
@@ -14,3 +15,4 @@ app.use(bodyParser.json());
 app.use("/", index);
 app.use("/user", customers);
 app.use("/order", order);
+app.use("/rider", rider);
