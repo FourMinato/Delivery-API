@@ -56,7 +56,7 @@ router.put("/update-order/:id", (req, res) => {
 
     // ตรวจสอบว่ามีข้อมูลที่จะอัพเดตหรือไม่
     if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ message: 'ไม่มีข้อมูลที่ต้องการอัพเดต' });
+        return res.status(400).json({ message: 'ไม่มีข้อมูลรายการที่ต้องการอัพเดต' });
     }
 
     // สร้างคำสั่ง SQL สำหรับการอัพเดต
