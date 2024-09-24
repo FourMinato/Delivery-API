@@ -13,12 +13,12 @@ export const router = express.Router();
 //สร้างรายการส่งสินค้า
 
 
-router.post('/create-order', upload.single('itemImage'), (req, res) => {
-    const { itemName, itemDescription, receiverPhone, senderId } = req.body;
+router.post('/create-delivery-order', upload.single('itemImage'), (req, res) => {
+    const { user_id, itemName, itemDescription, receiverPhone } = req.body;
     const itemImage = req.file ? req.file.path : null;
 
     // ตรวจสอบข้อมูลที่จำเป็น
-    if (!itemName || !itemDescription || !receiverPhone || !senderId) {
+    if (!user_id || !itemName || !itemDescription || !receiverPhone) {
         return res.status(400).json({ message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
     }
 
@@ -26,7 +26,7 @@ router.post('/create-order', upload.single('itemImage'), (req, res) => {
                  (sender_id, receiver_phone, item_name, item_description, item_image, status) 
                  VALUES (?, ?, ?, ?, ?, 'รอจัดส่ง')`;
 
-    conn.query(sql, [senderId, receiverPhone, itemName, itemDescription, itemImage], (err, result) => {
+    conn.query(sql, [user_id, receiverPhone, itemName, itemDescription, itemImage], (err, result) => {
         if (err) {
             console.error('Error creating delivery order:', err);
             return res.status(500).json({ message: 'เกิดข้อผิดพลาดในการสร้างรายการส่งสินค้า' });
