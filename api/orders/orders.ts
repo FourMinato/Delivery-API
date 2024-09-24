@@ -73,8 +73,8 @@ router.post('/create-order/:user_id', upload.single('itemImage'), (req, res) => 
 });
 
 
-router.put("/update-order/:id", (req, res) => {
-    const orderId = req.params.id;
+router.put("/update-delivery-order/:order_id", (req, res) => {
+    const orderId = req.params.order_id;
     const { itemName, itemDescription, receiverPhone, status } = req.body as {
         itemName?: string; itemDescription?: string; receiverPhone?: string; status?: string;
     };
@@ -88,17 +88,17 @@ router.put("/update-order/:id", (req, res) => {
 
     // ตรวจสอบว่ามีข้อมูลที่จะอัพเดตหรือไม่
     if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ message: 'ไม่มีข้อมูลรายการที่ต้องการอัพเดต' });
+        return res.status(400).json({ message: 'ไม่มีข้อมูลที่ต้องการอัพเดต' });
     }
 
     // สร้างคำสั่ง SQL สำหรับการอัพเดต
-    const sql = "UPDATE delivery_orders SET ? WHERE id = ?";
+    const sql = "UPDATE delivery_orders SET ? WHERE order_id = ?";
 
-    // ทำการ query
+    // ทำการ query พร้อมกับ error logging ที่ละเอียดขึ้น
     conn.query(sql, [updateData, orderId], (err, result) => {
         if (err) {
-            console.error("Error updating delivery order:", err.message);
-            return res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' });
+            console.error("Error updating delivery order:", err.message, err.stack);
+            return res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์', error: err.message });
         }
 
         if (result.affectedRows > 0) {
