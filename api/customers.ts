@@ -116,60 +116,77 @@ router.post("/register/riders", async (req, res) => {
 //Update
 
 // อัพเดตข้อมูล users
-router.put("/update/user", (req, res) => {
-    const { user_id, ...updateData } = req.body;
+router.put("/update/user/:id", (req, res) => {
+    const userId = req.params.id;
+    const { username, phone, email, password, address } = req.body as {
+        username?: string; phone?: string; email?: string; password?: string; address?: string;
+    };
 
-    if (!user_id) return res.status(400).json(
-        { message: 'User ID is required' }
-    );
+    // สร้างอ็อบเจ็กต์สำหรับเก็บข้อมูลที่จะอัพเดต
+    const updateData: {[key: string]: string} = {};
+    if (username !== undefined) updateData.username = username;
+    if (phone !== undefined) updateData.phone = phone;
+    if (email !== undefined) updateData.email = email;
+    if (password !== undefined) updateData.password = password;
+    if (address !== undefined) updateData.address = address;
 
-    const fields = Object.keys(updateData).filter(
-        key => updateData[key] !== undefined
-    );
+    // ตรวจสอบว่ามีข้อมูลที่จะอัพเดตหรือไม่
+    if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: 'No fields to update' });
+    }
 
-    if (fields.length === 0) return res.status(400).json(
-        { message: 'No fields to update' }
-    );
+    // สร้างคำสั่ง SQL สำหรับการอัพเดต
+    const sql = "UPDATE users SET ? WHERE user_id = ?";
 
-    const sql = `UPDATE users SET ${fields.map(f => `${f} = ?`).join(', ')} WHERE user_id = ?`;
+    // ทำการ query
+    conn.query(sql, [updateData, userId], (err, result) => {
+        if (err) {
+            console.error("Error updating user:", err.message);
+            return res.status(500).json({ message: 'Internal Server Error' });
+        }
 
-    const values = [...fields.map(f => updateData[f]), user_id];
-
-    conn.query(sql, values, (err, result) => {
-
-        if (err) return res.status(500).json(
-            { message: 'Internal Server Error' }
-        );
-        res.status(result.affectedRows > 0 ? 200 : 404).json(
-            {
-                message: result.affectedRows > 0 ? 'User updated successfully' : 'User not found'
-            });
+        if (result.affectedRows > 0) {
+            res.status(200).json({ message: 'User updated successfully' });
+        } else {
+            res.status(404).json({ message: 'User not found' });
+        }
     });
 });
 
 // อัพเดตข้อมูล riders
-router.put("/update/rider", (req, res) => {
-    const { rider_id, ...updateData } = req.body;
-    if (!rider_id) return res.status(400).json(
-        { message: 'Rider ID is required' }
-    );
+router.put("/update/rider/:id", (req, res) => {
+    const riderId = req.params.id;
+    const { username, phone, email, password, car_license } = req.body as {
+        username?: string; phone?: string; email?: string; password?: string; car_license?: string;
+    };
 
-    const fields = Object.keys(updateData).filter(
-        key => updateData[key] !== undefined
-    );
-    if (fields.length === 0) return res.status(400).json({ message: 'No fields to update' });
+    // สร้างอ็อบเจ็กต์สำหรับเก็บข้อมูลที่จะอัพเดต
+    const updateData: {[key: string]: string} = {};
+    if (username !== undefined) updateData.username = username;
+    if (phone !== undefined) updateData.phone = phone;
+    if (email !== undefined) updateData.email = email;
+    if (password !== undefined) updateData.password = password;
+    if (car_license !== undefined) updateData.car_license = car_license;
 
-    const sql = `UPDATE riders SET ${fields.map(f => `${f} = ?`).join(', ')} WHERE rider_id = ?`;
+    // ตรวจสอบว่ามีข้อมูลที่จะอัพเดตหรือไม่
+    if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: 'No fields to update' });
+    }
 
-    const values = [...fields.map(f => updateData[f]), rider_id];
+    // สร้างคำสั่ง SQL สำหรับการอัพเดต
+    const sql = "UPDATE riders SET ? WHERE rider_id = ?";
 
-    conn.query(sql, values, (err, result) => {
-        if (err) return res.status(500).json(
-            { message: 'Internal Server Error' }
-        );
-        res.status(result.affectedRows > 0 ? 200 : 404).json(
-            {
-                message: result.affectedRows > 0 ? 'Rider updated successfully' : 'Rider not found'
-            });
+    // ทำการ query
+    conn.query(sql, [updateData, riderId], (err, result) => {
+        if (err) {
+            console.error("Error updating user:", err.message);
+            return res.status(500).json({ message: 'Internal Server Error' });
+        }
+
+        if (result.affectedRows > 0) {
+            res.status(200).json({ message: 'User updated successfully' });
+        } else {
+            res.status(404).json({ message: 'User not found' });
+        }
     });
 });
