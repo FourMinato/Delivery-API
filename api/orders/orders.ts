@@ -39,3 +39,40 @@ router.post('/create-order/:user_id', upload.single('itemImage'), (req, res) => 
         });
     });
 });
+
+
+router.put("/update-order/:id", (req, res) => {
+    const orderId = req.params.id;
+    const { itemName, itemDescription, receiverPhone, status } = req.body as {
+        itemName?: string; itemDescription?: string; receiverPhone?: string; status?: string;
+    };
+
+    // สร้างอ็อบเจ็กต์สำหรับเก็บข้อมูลที่จะอัพเดต
+    const updateData: {[key: string]: string} = {};
+    if (itemName !== undefined) updateData.item_name = itemName;
+    if (itemDescription !== undefined) updateData.item_description = itemDescription;
+    if (receiverPhone !== undefined) updateData.receiver_phone = receiverPhone;
+    if (status !== undefined) updateData.status = status;
+
+    // ตรวจสอบว่ามีข้อมูลที่จะอัพเดตหรือไม่
+    if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: 'ไม่มีข้อมูลที่ต้องการอัพเดต' });
+    }
+
+    // สร้างคำสั่ง SQL สำหรับการอัพเดต
+    const sql = "UPDATE delivery_orders SET ? WHERE id = ?";
+
+    // ทำการ query
+    conn.query(sql, [updateData, orderId], (err, result) => {
+        if (err) {
+            console.error("Error updating delivery order:", err.message);
+            return res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' });
+        }
+
+        if (result.affectedRows > 0) {
+            res.status(200).json({ message: 'อัพเดตรายการส่งสินค้าสำเร็จ' });
+        } else {
+            res.status(404).json({ message: 'ไม่พบรายการส่งสินค้าที่ระบุ' });
+        }
+    });
+});
