@@ -11,8 +11,11 @@ export const router = express.Router();
 
 
 router.get("/", (req, res) => {
-
-    const sql = "select * from delivery_orders";
+    const sql = `
+        SELECT do.*, ds.status_name 
+        FROM delivery_orders do
+        JOIN delivery_status ds ON do.status_id = ds.status_id
+    `;
 
     conn.query(sql, (err, result) => {
         if (err) {
@@ -22,14 +25,11 @@ router.get("/", (req, res) => {
             });
         } else {
             if (result.length > 0) {
-
                 res.status(200).json({
                     success: true,
                     message: 'Get Data Success',
                     data: result
-
                 });
-
             } else {
                 res.status(400).json({
                     message: 'Get Data failed'
@@ -37,9 +37,7 @@ router.get("/", (req, res) => {
             }
         }
     });
-
 });
-
 
 
 //สร้างรายการส่งสินค้า
@@ -50,33 +48,48 @@ router.post('/create-order/:user_id', upload.single('itemImage'), (req, res) => 
     const { itemName, itemDescription, receiverPhone } = req.body;
     const itemImage = req.file ? req.file.path : null;
 
-    // ตรวจสอบข้อมูลที่จำเป็น
     if (!user_id || !itemName || !itemDescription || !receiverPhone) {
         return res.status(400).json({ message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
     }
 
-    const sql = `INSERT INTO delivery_orders 
-                 (sender_id, receiver_phone, item_name, item_description, item_image, status) 
-                 VALUES (?, ?, ?, ?, ?, 'รอจัดส่ง')`;
-
-    conn.query(sql, [user_id, receiverPhone, itemName, itemDescription, itemImage], (err, result) => {
-        if (err) {
-            console.error('Error creating delivery order:', err);
-            return res.status(500).json({ message: 'เกิดข้อผิดพลาดในการสร้างรายการส่งสินค้า' });
+    // ตรวจสอบว่าเลขโทรศัพท์ผู้รับมีอยู่ในตาราง users หรือไม่
+    const checkPhoneSql = "SELECT * FROM users WHERE phone = ?";
+    conn.query(checkPhoneSql, [receiverPhone], (checkErr, checkResult) => {
+        if (checkErr) {
+            console.error('Error checking receiver phone:', checkErr);
+            return res.status(500).json({ message: 'เกิดข้อผิดพลาดในการตรวจสอบเลขโทรศัพท์ผู้รับ' });
         }
 
-        res.status(201).json({ 
-            message: 'สร้างรายการส่งสินค้าสำเร็จ',
-            orderId: result.insertId
+        if (checkResult.length === 0) {
+            return res.status(400).json({ message: 'ไม่พบเลขโทรศัพท์ผู้รับในระบบ' });
+        }
+
+        // ถ้าพบเลขโทรศัพท์ในระบบ ดำเนินการสร้างรายการส่งสินค้า
+        const insertSql = `
+            INSERT INTO delivery_orders 
+            (sender_id, receiver_phone, item_name, item_description, item_image, status_id) 
+            VALUES (?, ?, ?, ?, ?, 1)
+        `;
+
+        conn.query(insertSql, [user_id, receiverPhone, itemName, itemDescription, itemImage], (insertErr, insertResult) => {
+            if (insertErr) {
+                console.error('Error creating delivery order:', insertErr);
+                return res.status(500).json({ message: 'เกิดข้อผิดพลาดในการสร้างรายการส่งสินค้า' });
+            }
+
+            res.status(201).json({ 
+                message: 'สร้างรายการส่งสินค้าสำเร็จ',
+                orderId: insertResult.insertId
+            });
         });
     });
 });
 
 
-router.put("/update-delivery-order/:order_id", (req, res) => {
+router.put("/update-order/:order_id", (req, res) => {
     const orderId = req.params.order_id;
-    const { itemName, itemDescription, receiverPhone, status } = req.body as {
-        itemName?: string; itemDescription?: string; receiverPhone?: string; status?: string;
+    const { itemName, itemDescription, receiverPhone, itemImage } = req.body as {
+        itemName?: string; itemDescription?: string; receiverPhone?: string; itemImage?: string;
     };
 
     // สร้างอ็อบเจ็กต์สำหรับเก็บข้อมูลที่จะอัพเดต
@@ -84,7 +97,7 @@ router.put("/update-delivery-order/:order_id", (req, res) => {
     if (itemName !== undefined) updateData.item_name = itemName;
     if (itemDescription !== undefined) updateData.item_description = itemDescription;
     if (receiverPhone !== undefined) updateData.receiver_phone = receiverPhone;
-    if (status !== undefined) updateData.status = status;
+    if (itemImage !== undefined) updateData.item_image = itemImage;
 
     // ตรวจสอบว่ามีข้อมูลที่จะอัพเดตหรือไม่
     if (Object.keys(updateData).length === 0) {
