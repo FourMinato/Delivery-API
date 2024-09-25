@@ -93,7 +93,7 @@ router.put("/update-order/:order_id", (req, res) => {
     };
 
     // สร้างอ็อบเจ็กต์สำหรับเก็บข้อมูลที่จะอัพเดต
-    const updateData: {[key: string]: string} = {};
+    const updateData: {[key: string]: string | number} = {};
     if (item_name !== undefined) updateData.item_name = item_name;
     if (item_description !== undefined) updateData.item_description = item_description;
     if (receiver_phone !== undefined) updateData.receiver_phone = receiver_phone;
@@ -107,8 +107,8 @@ router.put("/update-order/:order_id", (req, res) => {
     // สร้างคำสั่ง SQL สำหรับการอัพเดต
     const sql = "UPDATE delivery_orders SET ? WHERE order_id = ?";
 
-    // ทำการ query พร้อมกับ error logging ที่ละเอียดขึ้น
-    conn.query(sql, [updateData, orderId], (err, result) => {
+    // ทำการ query
+    conn.query(sql, [updateData, orderId], (err, result: any) => {
         if (err) {
             console.error("Error updating delivery order:", err.message, err.stack);
             return res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์', error: err.message });
