@@ -88,16 +88,16 @@ router.post('/create-order/:user_id', upload.single('itemImage'), (req, res) => 
 
 router.put("/update-order/:order_id", (req, res) => {
     const orderId = req.params.order_id;
-    const { itemName, itemDescription, receiverPhone, itemImage } = req.body as {
-        itemName?: string; itemDescription?: string; receiverPhone?: string; itemImage?: string;
+    const { item_name, item_description, receiver_phone, item_image } = req.body as {
+        item_name?: string; item_description?: string; receiver_phone?: string; item_image?: string;
     };
 
     // สร้างอ็อบเจ็กต์สำหรับเก็บข้อมูลที่จะอัพเดต
     const updateData: {[key: string]: string} = {};
-    if (itemName !== undefined) updateData.item_name = itemName;
-    if (itemDescription !== undefined) updateData.item_description = itemDescription;
-    if (receiverPhone !== undefined) updateData.receiver_phone = receiverPhone;
-    if (itemImage !== undefined) updateData.item_image = itemImage;
+    if (item_name !== undefined) updateData.item_name = item_name;
+    if (item_description !== undefined) updateData.item_description = item_description;
+    if (receiver_phone !== undefined) updateData.receiver_phone = receiver_phone;
+    if (item_image !== undefined) updateData.item_image = item_image;
 
     // ตรวจสอบว่ามีข้อมูลที่จะอัพเดตหรือไม่
     if (Object.keys(updateData).length === 0) {
