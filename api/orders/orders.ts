@@ -121,3 +121,53 @@ router.put("/update-order/:order_id", (req, res) => {
         }
     });
 });
+
+router.post('/accept-order/:order_id', (req, res) => {
+    const { order_id } = req.params;
+    const { rider_id } = req.body;
+
+    if (!order_id || !rider_id) {
+        return res.status(400).json({ message: 'กรุณาระบุ order_id และ rider_id' });
+    }
+
+    // ตรวจสอบสถานะของออเดอร์
+    const checkOrderSql = "SELECT status_id FROM delivery_orders WHERE order_id = ?";
+    conn.query(checkOrderSql, [order_id], (checkErr, checkResult) => {
+        if (checkErr) {
+            console.error('Error checking order status:', checkErr);
+            return res.status(500).json({ message: 'เกิดข้อผิดพลาดในการตรวจสอบสถานะออเดอร์' });
+        }
+
+        if (checkResult.length === 0) {
+            return res.status(404).json({ message: 'ไม่พบออเดอร์ที่ระบุ' });
+        }
+
+        if (checkResult[0].status_id !== 1) { // สมมติว่า 1 คือ 'รอเข้ารับ'
+            return res.status(400).json({ message: 'ออเดอร์นี้ไม่สามารถรับได้' });
+        }
+
+        // อัพเดตสถานะออเดอร์
+        const updateOrderSql = "UPDATE delivery_orders SET status_id = 2 WHERE order_id = ?";
+        conn.query(updateOrderSql, [order_id], (updateErr, updateResult) => {
+            if (updateErr) {
+                console.error('Error updating order status:', updateErr);
+                return res.status(500).json({ message: 'เกิดข้อผิดพลาดในการอัพเดตสถานะออเดอร์' });
+            }
+
+            // เพิ่มบันทึกในตาราง delivery_status_tracking
+            const insertTrackingSql = "INSERT INTO delivery_status_tracking (order_id, rider_id, status_id, timestamp) VALUES (?, ?, 2, CURRENT_TIMESTAMP)";
+            conn.query(insertTrackingSql, [order_id, rider_id], (insertErr, insertResult) => {
+                if (insertErr) {
+                    console.error('Error inserting tracking record:', insertErr);
+                    return res.status(500).json({ message: 'เกิดข้อผิดพลาดในการบันทึกการติดตามสถานะ' });
+                }
+
+                res.status(200).json({ 
+                    message: 'รับออเดอร์สำเร็จ',
+                    orderId: order_id,
+                    riderId: rider_id
+                });
+            });
+        });
+    });
+});
