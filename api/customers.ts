@@ -39,10 +39,10 @@ router.get("/", (req, res) => {
 
 
 router.post("/register", async (req, res) => {
-    const { username, phone, email, password } = req.body
+    const { username, phone, email, password, address, gps_location, profile_image } = req.body
 
-    if (!email || !password) {
-        return res.status(400).json({ message: 'Email and Password cannot be null' });
+    if (!username || !phone || !email || !password || !address) {
+        return res.status(400).json({ message: 'Username, Phone, Email, Password, and Address are required' });
     }
 
     const checkEmail = 'SELECT COUNT(*) AS count FROM users WHERE email = ?';
@@ -54,13 +54,12 @@ router.post("/register", async (req, res) => {
         }
 
         if (result[0].count > 0) {
-            // ตรวจพบ email ซ้ำ
             return res.status(409).json({ message: 'Email already exists' });
         }
 
-        const insert = "INSERT INTO users (username, phone, email, password, type) VALUES (?,?,?,?,?)";
+        const insert = "INSERT INTO users (username, phone, email, password, address, gps_location, profile_image, type) VALUES (?,?,?,?,?,?,?,?)";
 
-        conn.query(insert, [username, phone, email, password, 1], (err, result) => {
+        conn.query(insert, [username, phone, email, password, address, gps_location, profile_image, 1], (err, result) => {
             if (err) {
                 console.error("Error during insertion:", err.message);
                 return res.status(500).send('Error during insertion.');
@@ -75,41 +74,7 @@ router.post("/register", async (req, res) => {
     })
 });
 
-router.post("/register/riders", async (req, res) => {
-    const { username, phone, email, password, car_license } = req.body
 
-    if (!email || !password || !car_license) {
-        return res.status(400).json({ message: 'Email, Password, and Car License cannot be null' });
-    }
-
-    const checkEmail = 'SELECT COUNT(*) AS count FROM users WHERE email = ?';
-
-    conn.query(checkEmail, [email], (err, result) => {
-        if (err) {
-            console.error("Error checking email:", err.message);
-            return res.status(500).send('Error during email check.');
-        }
-
-        if (result[0].count > 0) {
-            return res.status(409).json({ message: 'Email already exists' });
-        }
-
-        const insert = "INSERT INTO users (username, phone, email, password, car_license, type) VALUES (?,?,?,?,?,?)";
-
-        conn.query(insert, [username, phone, email, password, car_license, 2], (err, result) => {
-            if (err) {
-                console.error("Error during insertion:", err.message);
-                return res.status(500).send('Error during insertion.');
-            }
-
-            if (result.affectedRows > 0) {
-                return res.status(200).json({ message: 'Inserted Successfully' });
-            } else {
-                return res.status(404).send('Insertion Failed');
-            }
-        });
-    });
-});
 
 
 //Update

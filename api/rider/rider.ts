@@ -39,3 +39,39 @@ router.get("/", (req, res) => {
     });
 
 });
+
+router.post("/register/riders", async (req, res) => {
+    const { username, phone, email, password, car_license, profile_image } = req.body
+
+    if (!username || !phone || !email || !password || !car_license) {
+        return res.status(400).json({ message: 'Username, Phone, Email, Password, and Car License are required' });
+    }
+
+    const checkEmail = 'SELECT COUNT(*) AS count FROM users WHERE email = ?';
+
+    conn.query(checkEmail, [email], (err, result) => {
+        if (err) {
+            console.error("Error checking email:", err.message);
+            return res.status(500).send('Error during email check.');
+        }
+
+        if (result[0].count > 0) {
+            return res.status(409).json({ message: 'Email already exists' });
+        }
+
+        const insert = "INSERT INTO users (username, phone, email, password, car_license, profile_image, type) VALUES (?,?,?,?,?,?,?)";
+
+        conn.query(insert, [username, phone, email, password, car_license, profile_image, 2], (err, result) => {
+            if (err) {
+                console.error("Error during insertion:", err.message);
+                return res.status(500).send('Error during insertion.');
+            }
+
+            if (result.affectedRows > 0) {
+                return res.status(200).json({ message: 'Inserted Successfully' });
+            } else {
+                return res.status(404).send('Insertion Failed');
+            }
+        });
+    });
+});
