@@ -40,6 +40,7 @@ router.get("/", (req, res) => {
 
 });
 
+// แก้ไข API route สำหรับการลงทะเบียนไรเดอร์
 router.post("/register/riders", async (req, res) => {
     const { username, phone, email, password, car_license, profile_image } = req.body
 
@@ -47,16 +48,16 @@ router.post("/register/riders", async (req, res) => {
         return res.status(400).json({ message: 'Username, Phone, Email, Password, and Car License are required' });
     }
 
-    const checkEmail = 'SELECT COUNT(*) AS count FROM users WHERE email = ?';
+    const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE email = ? OR phone = ?';
 
-    conn.query(checkEmail, [email], (err, result) => {
+    conn.query(checkExisting, [email, phone], (err, result) => {
         if (err) {
-            console.error("Error checking email:", err.message);
-            return res.status(500).send('Error during email check.');
+            console.error("Error checking existing user:", err.message);
+            return res.status(500).send('Error during user check.');
         }
 
         if (result[0].count > 0) {
-            return res.status(409).json({ message: 'Email already exists' });
+            return res.status(409).json({ message: 'Email or Phone number already exists' });
         }
 
         const insert = "INSERT INTO users (username, phone, email, password, car_license, profile_image, type) VALUES (?,?,?,?,?,?,?)";
