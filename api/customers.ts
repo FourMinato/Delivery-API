@@ -45,7 +45,7 @@ router.post("/register", async (req, res) => {
         return res.status(400).json({ message: 'Email and Password cannot be null' });
     }
 
-    const checkEmail = ' select count(*) as count From users where email = ?';
+    const checkEmail = 'SELECT COUNT(*) AS count FROM users WHERE email = ?';
 
     conn.query(checkEmail, [email], (err, result) => {
         if (err) {
@@ -58,9 +58,9 @@ router.post("/register", async (req, res) => {
             return res.status(409).json({ message: 'Email already exists' });
         }
 
-        const insert = "INSERT INTO users (username, phone, email, password) VALUES (?,?,?,?)";
+        const insert = "INSERT INTO users (username, phone, email, password, type) VALUES (?,?,?,?,?)";
 
-        conn.query(insert, [username, phone, email, password], (err, result) => {
+        conn.query(insert, [username, phone, email, password, 1], (err, result) => {
             if (err) {
                 console.error("Error during insertion:", err.message);
                 return res.status(500).send('Error during insertion.');
@@ -78,11 +78,11 @@ router.post("/register", async (req, res) => {
 router.post("/register/riders", async (req, res) => {
     const { username, phone, email, password, car_license } = req.body
 
-    if (!email || !password) {
-        return res.status(400).json({ message: 'Email and Password cannot be null' });
+    if (!email || !password || !car_license) {
+        return res.status(400).json({ message: 'Email, Password, and Car License cannot be null' });
     }
 
-    const checkEmail = ' select count(*) as count From riders where email = ?';
+    const checkEmail = 'SELECT COUNT(*) AS count FROM users WHERE email = ?';
 
     conn.query(checkEmail, [email], (err, result) => {
         if (err) {
@@ -91,13 +91,12 @@ router.post("/register/riders", async (req, res) => {
         }
 
         if (result[0].count > 0) {
-            // ตรวจพบ email ซ้ำ
             return res.status(409).json({ message: 'Email already exists' });
         }
 
-        const insert = "INSERT INTO users (username, phone, email, password, car_license) VALUES (?,?,?,?,?)";
+        const insert = "INSERT INTO users (username, phone, email, password, car_license, type) VALUES (?,?,?,?,?,?)";
 
-        conn.query(insert, [username, phone, email, password], (err, result) => {
+        conn.query(insert, [username, phone, email, password, car_license, 2], (err, result) => {
             if (err) {
                 console.error("Error during insertion:", err.message);
                 return res.status(500).send('Error during insertion.');
@@ -108,8 +107,8 @@ router.post("/register/riders", async (req, res) => {
             } else {
                 return res.status(404).send('Insertion Failed');
             }
-        })
-    })
+        });
+    });
 });
 
 
@@ -123,7 +122,7 @@ router.put("/update/user/:id", (req, res) => {
     };
 
     // สร้างอ็อบเจ็กต์สำหรับเก็บข้อมูลที่จะอัพเดต
-    const updateData: {[key: string]: string} = {};
+    const updateData: { [key: string]: string } = {};
     if (username !== undefined) updateData.username = username;
     if (phone !== undefined) updateData.phone = phone;
     if (email !== undefined) updateData.email = email;
@@ -161,7 +160,7 @@ router.put("/update/rider/:id", (req, res) => {
     };
 
     // สร้างอ็อบเจ็กต์สำหรับเก็บข้อมูลที่จะอัพเดต
-    const updateData: {[key: string]: string} = {};
+    const updateData: { [key: string]: string } = {};
     if (username !== undefined) updateData.username = username;
     if (phone !== undefined) updateData.phone = phone;
     if (email !== undefined) updateData.email = email;
@@ -190,3 +189,4 @@ router.put("/update/rider/:id", (req, res) => {
         }
     });
 });
+
