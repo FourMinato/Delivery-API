@@ -13,7 +13,8 @@ export const router = express.Router();
 initializeApp(Config.firebaseConfig);
 const storage = getStorage();
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ dest: 'uploads/' });
+
 
 function giveCurrrentDateTime() {
     return new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
@@ -52,7 +53,7 @@ router.get("/", (req, res) => {
 
 
 // แก้ไข API route สำหรับการลงทะเบียนผู้ใช้ทั่วไป
-router.post("/register", upload.single("filename"), async (req, res) => {
+router.post("/register", upload.single("profile_image"), async (req, res) => {
     try {
         const { username, phone, email, password, address, gps_location } = req.body;
 
@@ -110,7 +111,7 @@ router.post("/register", upload.single("filename"), async (req, res) => {
     }
 });
 
-router.post("/register/riders", upload.single("filename"), async (req, res) => {
+router.post("/register/riders", upload.single("profile_image"), async (req, res) => {
     try {
         const { username, phone, email, password, car_license } = req.body;
 
