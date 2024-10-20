@@ -13,7 +13,12 @@ export const router = express.Router();
 initializeApp(Config.firebaseConfig);
 const storage = getStorage();
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 5 * 1024 * 1024, // จำกัดขนาดไฟล์ที่ 5MB
+    },
+});
 
 
 function giveCurrrentDateTime() {
@@ -66,11 +71,11 @@ router.post("/register", upload.single('profile_image'), async (req, res) => {
         if (req.file) {
             const dateTime = giveCurrrentDateTime();
             const storageRef = ref(storage, `files/${req.file.originalname + "_" + dateTime}`);
-        
+
             const metadata = {
                 contentType: req.file.mimetype,
             };
-        
+
             try {
                 const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
                 profile_image_url = await getDownloadURL(snapshot.ref);
@@ -100,9 +105,9 @@ router.post("/register", upload.single('profile_image'), async (req, res) => {
                     console.error("Error during insertion:", err.message);
                     return res.status(500).json({ message: 'Error during insertion.' });
                 }
-            
+
                 console.log("Inserted user with profile image URL:", profile_image_url);
-            
+
                 if (result.affectedRows > 0) {
                     return res.status(200).json({
                         message: 'User registered successfully',
@@ -132,11 +137,11 @@ router.post("/register/riders", upload.single('profile_image'), async (req, res)
         if (req.file) {
             const dateTime = giveCurrrentDateTime();
             const storageRef = ref(storage, `files/${req.file.originalname + "_" + dateTime}`);
-        
+
             const metadata = {
                 contentType: req.file.mimetype,
             };
-        
+
             try {
                 const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
                 profile_image_url = await getDownloadURL(snapshot.ref);
@@ -166,9 +171,9 @@ router.post("/register/riders", upload.single('profile_image'), async (req, res)
                     console.error("Error during insertion:", err.message);
                     return res.status(500).json({ message: 'Error during insertion.' });
                 }
-            
+
                 console.log("Inserted user with profile image URL:", profile_image_url);
-            
+
                 if (result.affectedRows > 0) {
                     return res.status(200).json({
                         message: 'User registered successfully',
