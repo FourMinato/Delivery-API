@@ -53,12 +53,12 @@ router.get("/", (req, res) => {
 
 
 // แก้ไข API route สำหรับการลงทะเบียนผู้ใช้ทั่วไป
-router.post("/register", upload.single("profile_image"), async (req, res) => {
+router.post("/register", upload.single('profile_image'), async (req, res) => {
     try {
-        const { username, phone, email, password, address, gps_location } = req.body;
+        const { username, phone, password, address, gps_location } = req.body;
 
-        if (!username || !phone || !email || !password || !address) {
-            return res.status(400).json({ message: 'Username, Phone, Email, Password, and Address are required' });
+        if (!username || !phone || !password || !address) {
+            return res.status(400).json({ message: 'Username, Phone, Password, and Address are required' });
         }
 
         let profile_image_url = null;
@@ -75,21 +75,21 @@ router.post("/register", upload.single("profile_image"), async (req, res) => {
             profile_image_url = await getDownloadURL(snapshot.ref);
         }
 
-        const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE email = ? OR phone = ?';
+        const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE phone = ?';
 
-        conn.query(checkExisting, [email, phone], (err, result) => {
+        conn.query(checkExisting, [phone], (err, result) => {
             if (err) {
                 console.error("Error checking existing user:", err.message);
                 return res.status(500).json({ message: 'Error during user check.' });
             }
 
             if (result[0].count > 0) {
-                return res.status(409).json({ message: 'Email or Phone number already exists' });
+                return res.status(409).json({ message: 'Phone number already exists' });
             }
 
-            const insert = "INSERT INTO users (username, phone, email, password, address, gps_location, profile_image, type) VALUES (?,?,?,?,?,?,?,?)";
+            const insert = "INSERT INTO users (username, phone, password, address, gps_location, profile_image, type) VALUES (?,?,?,?,?,?,?)";
 
-            conn.query(insert, [username, phone, email, password, address, gps_location, profile_image_url, 1], (err, result) => {
+            conn.query(insert, [username, phone, password, address, gps_location, profile_image_url, 1], (err, result) => {
                 if (err) {
                     console.error("Error during insertion:", err.message);
                     return res.status(500).json({ message: 'Error during insertion.' });
@@ -111,12 +111,12 @@ router.post("/register", upload.single("profile_image"), async (req, res) => {
     }
 });
 
-router.post("/register/riders", upload.single("profile_image"), async (req, res) => {
+router.post("/register/riders", upload.single('profile_image'), async (req, res) => {
     try {
-        const { username, phone, email, password, car_license } = req.body;
+        const { username, phone, password, car_license } = req.body;
 
-        if (!username || !phone || !email || !password || !car_license) {
-            return res.status(400).json({ message: 'Username, Phone, Email, Password, and Car License are required' });
+        if (!username || !phone || !password || !car_license) {
+            return res.status(400).json({ message: 'Username, Phone, Password, and Car License are required' });
         }
 
         let profile_image_url = null;
@@ -133,21 +133,21 @@ router.post("/register/riders", upload.single("profile_image"), async (req, res)
             profile_image_url = await getDownloadURL(snapshot.ref);
         }
 
-        const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE email = ? OR phone = ?';
+        const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE phone = ?';
 
-        conn.query(checkExisting, [email, phone], (err, result) => {
+        conn.query(checkExisting, [phone], (err, result) => {
             if (err) {
                 console.error("Error checking existing user:", err.message);
                 return res.status(500).json({ message: 'Error during user check.' });
             }
 
             if (result[0].count > 0) {
-                return res.status(409).json({ message: 'Email or Phone number already exists' });
+                return res.status(409).json({ message: 'Phone number already exists' });
             }
 
-            const insert = "INSERT INTO users (username, phone, email, password, car_license, profile_image, type) VALUES (?,?,?,?,?,?,?)";
+            const insert = "INSERT INTO users (username, phone, password, car_license, profile_image, type) VALUES (?,?,?,?,?,?)";
 
-            conn.query(insert, [username, phone, email, password, car_license, profile_image_url, 2], (err, result) => {
+            conn.query(insert, [username, phone, password, car_license, profile_image_url, 2], (err, result) => {
                 if (err) {
                     console.error("Error during insertion:", err.message);
                     return res.status(500).json({ message: 'Error during insertion.' });
