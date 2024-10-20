@@ -66,13 +66,19 @@ router.post("/register", upload.single('profile_image'), async (req, res) => {
         if (req.file) {
             const dateTime = giveCurrrentDateTime();
             const storageRef = ref(storage, `files/${req.file.originalname + "_" + dateTime}`);
-
+        
             const metadata = {
                 contentType: req.file.mimetype,
             };
-
-            const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
-            profile_image_url = await getDownloadURL(snapshot.ref);
+        
+            try {
+                const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
+                profile_image_url = await getDownloadURL(snapshot.ref);
+                console.log("File uploaded successfully. URL:", profile_image_url);
+            } catch (error) {
+                console.error("Error uploading file:", error);
+                return res.status(500).json({ message: 'Error uploading file' });
+            }
         }
 
         const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE phone = ?';
@@ -94,7 +100,9 @@ router.post("/register", upload.single('profile_image'), async (req, res) => {
                     console.error("Error during insertion:", err.message);
                     return res.status(500).json({ message: 'Error during insertion.' });
                 }
-
+            
+                console.log("Inserted user with profile image URL:", profile_image_url);
+            
                 if (result.affectedRows > 0) {
                     return res.status(200).json({
                         message: 'User registered successfully',
@@ -123,14 +131,20 @@ router.post("/register/riders", upload.single('profile_image'), async (req, res)
 
         if (req.file) {
             const dateTime = giveCurrrentDateTime();
-            const storageRef = ref(storage, `rider_files/${req.file.originalname + "_" + dateTime}`);
-
+            const storageRef = ref(storage, `files/${req.file.originalname + "_" + dateTime}`);
+        
             const metadata = {
                 contentType: req.file.mimetype,
             };
-
-            const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
-            profile_image_url = await getDownloadURL(snapshot.ref);
+        
+            try {
+                const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
+                profile_image_url = await getDownloadURL(snapshot.ref);
+                console.log("File uploaded successfully. URL:", profile_image_url);
+            } catch (error) {
+                console.error("Error uploading file:", error);
+                return res.status(500).json({ message: 'Error uploading file' });
+            }
         }
 
         const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE phone = ?';
@@ -152,10 +166,12 @@ router.post("/register/riders", upload.single('profile_image'), async (req, res)
                     console.error("Error during insertion:", err.message);
                     return res.status(500).json({ message: 'Error during insertion.' });
                 }
-
+            
+                console.log("Inserted user with profile image URL:", profile_image_url);
+            
                 if (result.affectedRows > 0) {
                     return res.status(200).json({
-                        message: 'Rider registered successfully',
+                        message: 'User registered successfully',
                         profile_image: profile_image_url
                     });
                 } else {
