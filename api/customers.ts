@@ -1,10 +1,23 @@
 import express from "express";
 import { conn } from "../dbconn";
 import mysql from "mysql";
+import multer from "multer";
+import { v4 as uuidv4 } from 'uuid';
+import { initializeApp } from "firebase/app";
+import { getStorage, ref, getDownloadURL, uploadBytesResumable } from "firebase/storage";
+import Config from '../api/config/firebase.config';
 
 
 export const router = express.Router();
 
+initializeApp(Config.firebaseConfig);
+const storage = getStorage();
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+function giveCurrrentDateTime() {
+    return new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
+}
 
 router.get("/", (req, res) => {
 
@@ -39,40 +52,120 @@ router.get("/", (req, res) => {
 
 
 // แก้ไข API route สำหรับการลงทะเบียนผู้ใช้ทั่วไป
-router.post("/register", async (req, res) => {
-    const { username, phone, email, password, address, gps_location, profile_image } = req.body
+router.post("/register", upload.single("filename"), async (req, res) => {
+    try {
+        const { username, phone, email, password, address, gps_location } = req.body;
 
-    if (!username || !phone || !email || !password || !address) {
-        return res.status(400).json({ message: 'Username, Phone, Email, Password, and Address are required' });
-    }
-
-    const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE email = ? OR phone = ?';
-
-    conn.query(checkExisting, [email, phone], (err, result) => {
-        if (err) {
-            console.error("Error checking existing user:", err.message);
-            return res.status(500).send('Error during user check.');
+        if (!username || !phone || !email || !password || !address) {
+            return res.status(400).json({ message: 'Username, Phone, Email, Password, and Address are required' });
         }
 
-        if (result[0].count > 0) {
-            return res.status(409).json({ message: 'Email or Phone number already exists' });
+        let profile_image_url = null;
+
+        if (req.file) {
+            const dateTime = giveCurrrentDateTime();
+            const storageRef = ref(storage, `files/${req.file.originalname + "_" + dateTime}`);
+
+            const metadata = {
+                contentType: req.file.mimetype,
+            };
+
+            const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
+            profile_image_url = await getDownloadURL(snapshot.ref);
         }
 
-        const insert = "INSERT INTO users (username, phone, email, password, address, gps_location, profile_image, type) VALUES (?,?,?,?,?,?,?,?)";
+        const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE email = ? OR phone = ?';
 
-        conn.query(insert, [username, phone, email, password, address, gps_location, profile_image, 1], (err, result) => {
+        conn.query(checkExisting, [email, phone], (err, result) => {
             if (err) {
-                console.error("Error during insertion:", err.message);
-                return res.status(500).send('Error during insertion.');
+                console.error("Error checking existing user:", err.message);
+                return res.status(500).json({ message: 'Error during user check.' });
             }
 
-            if (result.affectedRows > 0) {
-                return res.status(200).json({ message: 'Inserted Successfully' });
-            } else {
-                return res.status(404).send('Insertion Failed');
+            if (result[0].count > 0) {
+                return res.status(409).json({ message: 'Email or Phone number already exists' });
             }
-        })
-    })
+
+            const insert = "INSERT INTO users (username, phone, email, password, address, gps_location, profile_image, type) VALUES (?,?,?,?,?,?,?,?)";
+
+            conn.query(insert, [username, phone, email, password, address, gps_location, profile_image_url, 1], (err, result) => {
+                if (err) {
+                    console.error("Error during insertion:", err.message);
+                    return res.status(500).json({ message: 'Error during insertion.' });
+                }
+
+                if (result.affectedRows > 0) {
+                    return res.status(200).json({
+                        message: 'User registered successfully',
+                        profile_image: profile_image_url
+                    });
+                } else {
+                    return res.status(404).json({ message: 'Registration failed' });
+                }
+            });
+        });
+    } catch (error) {
+        console.error("Error in registration process:", error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+router.post("/register/riders", upload.single("filename"), async (req, res) => {
+    try {
+        const { username, phone, email, password, car_license } = req.body;
+
+        if (!username || !phone || !email || !password || !car_license) {
+            return res.status(400).json({ message: 'Username, Phone, Email, Password, and Car License are required' });
+        }
+
+        let profile_image_url = null;
+
+        if (req.file) {
+            const dateTime = giveCurrrentDateTime();
+            const storageRef = ref(storage, `rider_files/${req.file.originalname + "_" + dateTime}`);
+
+            const metadata = {
+                contentType: req.file.mimetype,
+            };
+
+            const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
+            profile_image_url = await getDownloadURL(snapshot.ref);
+        }
+
+        const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE email = ? OR phone = ?';
+
+        conn.query(checkExisting, [email, phone], (err, result) => {
+            if (err) {
+                console.error("Error checking existing user:", err.message);
+                return res.status(500).json({ message: 'Error during user check.' });
+            }
+
+            if (result[0].count > 0) {
+                return res.status(409).json({ message: 'Email or Phone number already exists' });
+            }
+
+            const insert = "INSERT INTO users (username, phone, email, password, car_license, profile_image, type) VALUES (?,?,?,?,?,?,?)";
+
+            conn.query(insert, [username, phone, email, password, car_license, profile_image_url, 2], (err, result) => {
+                if (err) {
+                    console.error("Error during insertion:", err.message);
+                    return res.status(500).json({ message: 'Error during insertion.' });
+                }
+
+                if (result.affectedRows > 0) {
+                    return res.status(200).json({
+                        message: 'Rider registered successfully',
+                        profile_image: profile_image_url
+                    });
+                } else {
+                    return res.status(404).json({ message: 'Registration failed' });
+                }
+            });
+        });
+    } catch (error) {
+        console.error("Error in rider registration process:", error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
 });
 
 
@@ -155,4 +248,3 @@ router.put("/update/rider/:id", (req, res) => {
         }
     });
 });
-
