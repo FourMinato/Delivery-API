@@ -4,7 +4,8 @@ export interface OrderItem {
     item_description?: string;
     item_quantity: number;
     item_price: number;
-    item_image?: string;
+    item_image?: string | null;
+    sender_id?: number,
 }
 
 export interface OrderCreateRequest {
