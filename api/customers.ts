@@ -4,7 +4,7 @@ import mysql from "mysql";
 import multer from "multer";
 import { v4 as uuidv4 } from 'uuid';
 import { initializeApp } from "firebase/app";
-import { getStorage, ref, getDownloadURL, uploadBytesResumable } from "firebase/storage";
+import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from "firebase/storage";
 import Config from '../api/config/firebase.config';
 import { UserGetResponse } from '../api/Model/UserGet'
 
@@ -19,6 +19,19 @@ const upload = multer({
         fileSize: 5 * 1024 * 1024, // จำกัดขนาดไฟล์ที่ 5MB
     },
 });
+
+// ฟังก์ชันสำหรับลบรูปเดิมใน Firebase
+async function deleteOldProfileImage(oldImageUrl: string | null) {
+    if (oldImageUrl) {
+        try {
+            const oldImageRef = ref(storage, oldImageUrl);
+            await deleteObject(oldImageRef);
+            console.log("Old profile image deleted successfully");
+        } catch (error) {
+            console.error("Error deleting old profile image:", error);
+        }
+    }
+}
 
 
 function giveCurrrentDateTime() {
@@ -242,78 +255,223 @@ router.post("/register/riders", upload.single('profile_image'), async (req, res)
 
 //Update
 
-// อัพเดตข้อมูล users
-router.put("/update/user/:id", (req, res) => {
-    const userId = req.params.id;
-    const { username, phone, email, password, address } = req.body as {
-        username?: string; phone?: string; email?: string; password?: string; address?: string;
-    };
+// อัพเดตข้อมูลผู้ใช้ทั่วไป
+router.put("/update/user/:id", upload.single('profile_image'), async (req: Request, res: Response) => {
+    try {
+        const userId = parseInt(req.params.id);
+        
+        if (isNaN(userId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'รหัสผู้ใช้ไม่ถูกต้อง'
+            });
+        }
 
-    // สร้างอ็อบเจ็กต์สำหรับเก็บข้อมูลที่จะอัพเดต
-    const updateData: { [key: string]: string } = {};
-    if (username !== undefined) updateData.username = username;
-    if (phone !== undefined) updateData.phone = phone;
-    if (email !== undefined) updateData.email = email;
-    if (password !== undefined) updateData.password = password;
-    if (address !== undefined) updateData.address = address;
+        const { username, phone, password, address, gps_location } = req.body;
 
-    // ตรวจสอบว่ามีข้อมูลที่จะอัพเดตหรือไม่
-    if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ message: 'No fields to update' });
+        // ตรวจสอบข้อมูลที่จำเป็น
+        if (!username || !phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'กรุณากรอกชื่อผู้ใช้และเบอร์โทรศัพท์'
+            });
+        }
+
+        // ดึงข้อมูลผู้ใช้เดิม
+        const getUserSql = "SELECT * FROM users WHERE user_id = ? AND type = 1";
+        conn.query(getUserSql, [userId], async (err, result: any) => {
+            if (err) {
+                console.error("Error fetching user data:", err);
+                return res.status(500).json({
+                    success: false,
+                    message: 'เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้'
+                });
+            }
+
+            if (result.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'ไม่พบข้อมูลผู้ใช้'
+                });
+            }
+
+            const oldUser = result[0];
+            let profile_image_url = oldUser.profile_image;
+
+            // ถ้ามีการอัปโหลดรูปภาพใหม่
+            if (req.file) {
+                try {
+                    const dateTime = new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
+                    const storageRef = ref(storage, `profile_images/${req.file.originalname}_${dateTime}`);
+                    const metadata = {
+                        contentType: req.file.mimetype,
+                    };
+                    const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
+                    profile_image_url = await getDownloadURL(snapshot.ref);
+                    console.log("อัปโหลดรูปโปรไฟล์ใหม่สำเร็จ URL:", profile_image_url);
+
+                    // ลบรูปภาพเก่า (ถ้ามี)
+                    if (oldUser.profile_image) {
+                        await deleteOldProfileImage(oldUser.profile_image);
+                        console.log("ลบรูปโปรไฟล์เก่าสำเร็จ");
+                    }
+                } catch (uploadError) {
+                    console.error("เกิดข้อผิดพลาดในการอัปโหลดรูปโปรไฟล์ใหม่:", uploadError);
+                    return res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการอัปโหลดรูปโปรไฟล์' });
+                }
+            }
+
+            // เตรียมข้อมูลสำหรับอัปเดต
+            const updateData: any = {
+                username: username,
+                phone: phone,
+                address: address || oldUser.address,
+                gps_location: gps_location || oldUser.gps_location,
+                profile_image: profile_image_url
+            };
+
+            // อัปเดตรหัสผ่านเฉพาะเมื่อมีการส่งมา
+            if (password) {
+                // ควรมีการ hash password ก่อนบันทึก
+                updateData.password = password;
+            }
+
+            // อัปเดตข้อมูลในฐานข้อมูล
+            const updateUserSql = "UPDATE users SET ? WHERE user_id = ? AND type = 1";
+            conn.query(updateUserSql, [updateData, userId], (updateErr, updateResult: any) => {
+                if (updateErr) {
+                    console.error("Error updating user:", updateErr);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลผู้ใช้'
+                    });
+                }
+
+                if (updateResult.affectedRows === 0) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'ไม่พบข้อมูลผู้ใช้หรือไม่ใช่ผู้ใช้ทั่วไป'
+                    });
+                }
+
+                res.status(200).json({
+                    success: true,
+                    message: 'อัปเดตข้อมูลผู้ใช้สำเร็จ',
+                    data: {
+                        user_id: userId
+                    }
+                });
+            });
+        });
+    } catch (error) {
+        console.error("เกิดข้อผิดพลาดในกระบวนการอัปเดตข้อมูลผู้ใช้:", error);
+        res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' });
     }
-
-    // สร้างคำสั่ง SQL สำหรับการอัพเดต
-    const sql = "UPDATE users SET ? WHERE user_id = ?";
-
-    // ทำการ query
-    conn.query(sql, [updateData, userId], (err, result) => {
-        if (err) {
-            console.error("Error updating user:", err.message);
-            return res.status(500).json({ message: 'Internal Server Error' });
-        }
-
-        if (result.affectedRows > 0) {
-            res.status(200).json({ message: 'User updated successfully' });
-        } else {
-            res.status(404).json({ message: 'User not found' });
-        }
-    });
 });
 
-// อัพเดตข้อมูล riders
-router.put("/update/rider/:id", (req, res) => {
-    const riderId = req.params.id;
-    const { username, phone, email, password, car_license } = req.body as {
-        username?: string; phone?: string; email?: string; password?: string; car_license?: string;
-    };
+// อัพเดตข้อมูลไรเดอร์
+router.put("/update/rider/:id", upload.single('profile_image'), async (req: Request, res: Response) => {
+    try {
+        const riderId = parseInt(req.params.id);
+        
+        if (isNaN(riderId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid rider ID'
+            });
+        }
 
-    // สร้างอ็อบเจ็กต์สำหรับเก็บข้อมูลที่จะอัพเดต
-    const updateData: { [key: string]: string } = {};
-    if (username !== undefined) updateData.username = username;
-    if (phone !== undefined) updateData.phone = phone;
-    if (email !== undefined) updateData.email = email;
-    if (password !== undefined) updateData.password = password;
-    if (car_license !== undefined) updateData.car_license = car_license;
+        const { username, phone, password, car_license } = req.body;
 
-    // ตรวจสอบว่ามีข้อมูลที่จะอัพเดตหรือไม่
-    if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ message: 'No fields to update' });
+        // ตรวจสอบข้อมูลที่จำเป็น
+        if (!username || !phone || !car_license) {
+            return res.status(400).json({
+                success: false,
+                message: 'กรุณากรอกชื่อผู้ใช้, เบอร์โทรศัพท์, และเลขทะเบียนรถ'
+            });
+        }
+
+        // ดึงข้อมูลไรเดอร์เดิม
+        const getRiderSql = "SELECT * FROM users WHERE user_id = ? AND type = 2";
+        conn.query(getRiderSql, [riderId], async (err: any, result: any) => {
+            if (err) {
+                console.error("Error fetching rider data:", err);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Error fetching rider data'
+                });
+            }
+
+            if (result.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Rider not found'
+                });
+            }
+
+            const oldRider = result[0];
+            let profile_image_url = oldRider.profile_image;
+
+            // ถ้ามีการอัปโหลดรูปภาพใหม่
+            if (req.file) {
+                try {
+                    const dateTime = new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
+                    const storageRef = ref(storage, `rider_images/${req.file.originalname}_${dateTime}`);
+                    const metadata = {
+                        contentType: req.file.mimetype,
+                    };
+                    const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
+                    profile_image_url = await getDownloadURL(snapshot.ref);
+                    console.log("New rider profile image uploaded successfully. URL:", profile_image_url);
+
+                    // ลบรูปภาพเก่า (ถ้ามี)
+                    if (oldRider.profile_image) {
+                        await deleteOldProfileImage(oldRider.profile_image);
+                    }
+                } catch (uploadError) {
+                    console.error("Error uploading new rider profile image:", uploadError);
+                    return res.status(500).json({ message: 'Error uploading new rider profile image' });
+                }
+            }
+
+            // อัปเดตข้อมูลในฐานข้อมูล
+            const updateRiderSql = "UPDATE users SET username = ?, phone = ?, password = ?, car_license = ?, profile_image = ? WHERE user_id = ? AND type = 2";
+            const updateValues = [
+                username,
+                phone,
+                password ? password : oldRider.password, // ควรมีการ hash password ก่อนบันทึก
+                car_license,
+                profile_image_url,
+                riderId
+            ];
+
+            conn.query(updateRiderSql, updateValues, (updateErr: any, updateResult: any) => {
+                if (updateErr) {
+                    console.error("Error updating rider:", updateErr);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Error updating rider'
+                    });
+                }
+
+                if (updateResult.affectedRows === 0) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'Rider not found or not a rider'
+                    });
+                }
+
+                res.status(200).json({
+                    success: true,
+                    message: 'อัปเดตข้อมูลไรเดอร์สำเร็จ',
+                    data: {
+                        user_id: riderId
+                    }
+                });
+            });
+        });
+    } catch (error) {
+        console.error("Error in rider update process:", error);
+        res.status(500).json({ message: 'Internal server error' });
     }
-
-    // สร้างคำสั่ง SQL สำหรับการอัพเดต
-    const sql = "UPDATE riders SET ? WHERE rider_id = ?";
-
-    // ทำการ query
-    conn.query(sql, [updateData, riderId], (err, result) => {
-        if (err) {
-            console.error("Error updating user:", err.message);
-            return res.status(500).json({ message: 'Internal Server Error' });
-        }
-
-        if (result.affectedRows > 0) {
-            res.status(200).json({ message: 'User updated successfully' });
-        } else {
-            res.status(404).json({ message: 'User not found' });
-        }
-    });
 });

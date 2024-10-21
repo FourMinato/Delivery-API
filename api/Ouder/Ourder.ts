@@ -1,9 +1,8 @@
 import express, { Request, Response } from "express";
 import { conn } from "../../dbconn";
-import { OrderCreateRequest, OrderResponse } from '../Model/OurderGet';
+import {OrderResponse, OrderItem } from '../Model/OurderGet';
 
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from "firebase/storage";
-import Config from '../config/firebase.config';
 import multer from "multer";
 
 
@@ -18,7 +17,7 @@ const upload = multer({
     },
 });
 
-function giveCurrrentDateTime() {
+function getCurrentDateTime() {
     return new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
 }
 
@@ -40,97 +39,137 @@ async function deleteImageFromFirebase(imageUrl: string) {
     }
 }
 
+router.post("/items", upload.single('item_image'), async (req: Request, res: Response) => {
+    const { item_name, item_description, item_quantity, item_price } = req.body;
+    let item_image_url: string | null = null;
 
+    if (req.file) {
+        try {
+            const dateTime = getCurrentDateTime();
+            const storageRef = ref(storage, `item_images/${req.file.originalname + "_" + dateTime}`);
+            const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, {
+                contentType: req.file.mimetype,
+            });
+            item_image_url = await getDownloadURL(snapshot.ref);
+        } catch (error) {
+            console.error("Error uploading image:", error);
+        }
+    }
 
-router.post("/orders", upload.single('item_image'), async (req: Request, res: Response) => {
-    try {
-        const { sender_id, receiver_phone, item_name, item_description } = req.body;
+    const newItem = {
+        item_name,
+        item_description,
+        item_quantity: parseInt(item_quantity),
+        item_price: parseFloat(item_price),
+        item_image: item_image_url
+    };
 
-        if (!sender_id || !receiver_phone || !item_name || !item_description) {
-            return res.status(400).json({
+    conn.query("INSERT INTO order_items SET ?", newItem, (err, result: any) => {
+        if (err) {
+            console.error("Error creating item:", err);
+            return res.status(500).json({
                 success: false,
-                message: 'กรุณากรอกข้อมูลให้ครบถ้วน'
+                message: 'เกิดข้อผิดพลาดในการสร้างรายการสินค้า'
             });
         }
 
-        // ตรวจสอบว่าเบอร์โทรศัพท์มีอยู่ในตาราง users หรือไม่
-        const checkPhoneSql = "SELECT * FROM users WHERE phone = ?";
-        conn.query(checkPhoneSql, [receiver_phone], async (checkErr: any, checkResult: any) => {
-            if (checkErr) {
-                console.error("Error checking phone number:", checkErr);
+        res.status(201).json({
+            success: true,
+            message: 'สร้างรายการสินค้าสำเร็จ',
+            data: { ...newItem, item_id: result.insertId }
+        });
+    });
+});
+
+
+
+router.post("/orders", async (req: Request, res: Response) => {
+    const { sender_id, receiver_phone, item_ids } = req.body;
+
+    if (!sender_id || !receiver_phone || !item_ids || !Array.isArray(item_ids) || item_ids.length === 0) {
+        return res.status(400).json({
+            success: false,
+            message: 'กรุณากรอกข้อมูลให้ครบถ้วน รวมถึงรายการ item_id'
+        });
+    }
+
+    // ตรวจสอบเบอร์โทรศัพท์
+    conn.query("SELECT * FROM users WHERE phone = ?", [receiver_phone], (err, users) => {
+        if (err || users.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'เบอร์โทรศัพท์ไม่ถูกต้องหรือไม่มีอยู่ในระบบ'
+            });
+        }
+
+        // ดึงข้อมูลสินค้าจาก item_ids
+        conn.query("SELECT * FROM order_items WHERE item_id IN (?)", [item_ids], (itemErr, items: any[]) => {
+            if (itemErr) {
                 return res.status(500).json({
                     success: false,
-                    message: 'เกิดข้อผิดพลาดในการตรวจสอบเบอร์โทรศัพท์'
+                    message: 'เกิดข้อผิดพลาดในการดึงข้อมูลสินค้า'
                 });
             }
 
-            if (checkResult.length === 0) {
+            if (items.length !== item_ids.length) {
                 return res.status(400).json({
                     success: false,
-                    message: 'เบอร์โทรศัพท์ไม่ถูกต้องหรือไม่มีอยู่ในระบบ'
+                    message: 'มีรายการสินค้าบางรายการไม่ถูกต้อง'
                 });
             }
 
-            let item_image_url = '';
+            // คำนวณยอดรวมของออเดอร์
+            const total_amount = items.reduce((sum, item) => sum + (item.item_price * item.item_quantity), 0);
+            const total_items = items.reduce((sum, item) => sum + item.item_quantity, 0);
 
-            if (req.file) {
-                const dateTime = giveCurrrentDateTime();
-                const storageRef = ref(storage, `order_images/${req.file.originalname + "_" + dateTime}`);
-
-                const metadata = {
-                    contentType: req.file.mimetype,
-                };
-
-                try {
-                    const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
-                    item_image_url = await getDownloadURL(snapshot.ref);
-                    console.log("Item image uploaded successfully. URL:", item_image_url);
-                } catch (error) {
-                    console.error("Error uploading item image:", error);
-                    return res.status(500).json({ message: 'Error uploading item image' });
-                }
-            }
-
-            const newOrder: OrderCreateRequest = {
-                sender_id: parseInt(sender_id),
+            // สร้างออเดอร์ใหม่
+            const newOrder = {
+                sender_id,
                 receiver_phone,
-                item_name,
-                item_description,
-                item_image: item_image_url,
-                status_id: 1, // กำหนด status เป็น 1 โดยอัตโนมัติ
+                item_ids: item_ids[0], // เก็บ item_id แรกตามโครงสร้าง DB
+                status_id: 1,
+                total_amount,
+                total_items
             };
 
-            const sql = "INSERT INTO delivery_orders SET ?";
-
-            conn.query(sql, newOrder, (err: any, result: any) => {
-                if (err) {
-                    console.error("Error during order insertion:", err);
+            // Insert ลงในตาราง delivery_orders
+            conn.query("INSERT INTO delivery_orders SET ?", newOrder, (orderErr, orderResult: any) => {
+                if (orderErr) {
                     return res.status(500).json({
                         success: false,
-                        message: 'Error during order insertion'
+                        message: 'เกิดข้อผิดพลาดในการสร้างออเดอร์'
                     });
                 }
 
-                const createdOrder: OrderResponse = {
-                    ...newOrder,
-                    order_id: result.insertId,
-                    created_at: new Date(),
-                    updated_at: new Date()
-                };
+                const orderId = orderResult.insertId;
 
-                res.status(201).json({
-                    success: true,
-                    message: 'สร้างรายการสั่งซื้อสำเร็จ',
-                    data: createdOrder
-                });
+                // สร้าง status tracking สำหรับออเดอร์ใหม่
+                conn.query(
+                    "INSERT INTO delivery_status_tracking (order_id, status_id) VALUES (?, ?)",
+                    [orderId, 1],
+                    (trackingErr) => {
+                        if (trackingErr) {
+                            return res.status(500).json({
+                                success: false,
+                                message: 'เกิดข้อผิดพลาดในการสร้างสถานะการติดตาม'
+                            });
+                        }
+
+                        res.status(201).json({
+                            success: true,
+                            message: 'สร้างออเดอร์สำเร็จ',
+                            data: {
+                                order_id: orderId,
+                                ...newOrder,
+                                items: items // ส่งข้อมูลสินค้าทั้งหมดกลับไป
+                            }
+                        });
+                    }
+                );
             });
         });
-    } catch (error) {
-        console.error("Error in order creation process:", error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
+    });
 });
-
 
 // API สำหรับอัปเดต order
 router.put("/orders/:orderId", upload.single('item_image'), async (req: Request, res: Response) => {
@@ -145,7 +184,7 @@ router.put("/orders/:orderId", upload.single('item_image'), async (req: Request,
                 message: 'กรุณากรอกข้อมูลให้ครบถ้วน'
             });
         }
-        
+
         const checkPhoneSql = "SELECT * FROM users WHERE phone = ?";
         conn.query(checkPhoneSql, [receiver_phone], async (checkErr: any, checkResult: any) => {
             if (checkErr) {
@@ -164,7 +203,7 @@ router.put("/orders/:orderId", upload.single('item_image'), async (req: Request,
             }
         });
 
-        
+
 
         // ดึงข้อมูล order เดิม
         const getOldOrderSql = "SELECT * FROM delivery_orders WHERE order_id = ?";
@@ -189,7 +228,7 @@ router.put("/orders/:orderId", upload.single('item_image'), async (req: Request,
 
             // ถ้ามีการอัปโหลดรูปภาพใหม่
             if (req.file) {
-                const dateTime = giveCurrrentDateTime();
+                const dateTime = getCurrentDateTime();
                 const storageRef = ref(storage, `order_images/${req.file.originalname + "_" + dateTime}`);
 
                 const metadata = {
@@ -245,15 +284,6 @@ router.put("/orders/:orderId", upload.single('item_image'), async (req: Request,
                 res.status(200).json({
                     success: true,
                     message: 'อัปเดตรายการสั่งซื้อสำเร็จ',
-                    data: {
-                        order_id: orderId,
-                        sender_id: parseInt(sender_id),
-                        receiver_phone,
-                        item_name,
-                        item_description,
-                        item_image: item_image_url,
-                        updated_at: new Date()
-                    }
                 });
             });
         });
