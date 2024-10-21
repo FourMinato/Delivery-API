@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import { conn } from "../dbconn";
 import mysql from "mysql";
 import multer from "multer";
@@ -6,10 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { initializeApp } from "firebase/app";
 import { getStorage, ref, getDownloadURL, uploadBytesResumable } from "firebase/storage";
 import Config from '../api/config/firebase.config';
+import { UserGetResponse } from '../api/Model/UserGet'
 
 
 export const router = express.Router();
-
 initializeApp(Config.firebaseConfig);
 const storage = getStorage();
 
@@ -53,6 +53,53 @@ router.get("/", (req, res) => {
         }
     });
 
+});
+
+router.post("/login", (req: Request, res: Response) => {
+    const { phone, password } = req.body;
+
+    if (!phone || !password) {
+        return res.status(400).json({
+            success: false,
+            message: 'กรุณากรอกเบอร์โทรศัพท์และรหัสผ่าน'
+        });
+    }
+
+    const sql = "SELECT * FROM users WHERE phone = ?";
+
+    conn.query(sql, [phone], (err: any, result: UserGetResponse[]) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({
+                success: false,
+                message: 'Internal Server Error'
+            });
+        }
+
+        if (result.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'ไม่พบผู้ใช้'
+            });
+        }
+
+        const user: UserGetResponse = result[0];
+
+        // เปรียบเทียบรหัสผ่านโดยตรง
+        if (password !== user.password) {
+            return res.status(401).json({
+                success: false,
+                message: 'รหัสผ่านไม่ถูกต้อง'
+            });
+        }
+
+        // ส่งข้อมูลกลับ
+        res.status(200).json({
+            success: true,
+            message: 'เข้าสู่ระบบสำเร็จ',
+            data: user
+        });
+    });
 });
 
 
