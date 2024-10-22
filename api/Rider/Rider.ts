@@ -77,12 +77,87 @@ riderRouter.get("/all-orders", (req: Request, res: Response) => {
     });
 });
 
-// API สำหรับไรเดอร์รับออเดอร์
-riderRouter.post("/accept-order", upload.single('status_image'), (req, res) => {
+// API สำหรับไรเดอร์รับออเดอร์ (สถานะ 2: รับสินค้า)
+riderRouter.post("/accept-order", (req, res) => {
+    const { userId, orderId } = req.body;
+
+    if (!userId || !orderId) {
+        return res.status(400).json({
+            success: false,
+            message: "กรุณาระบุข้อมูลให้ครบถ้วน"
+        });
+    }
+
+    // ตรวจสอบว่าออเดอร์มีอยู่จริงและยังไม่ถูกรับ
+    conn.query(
+        "SELECT * FROM delivery_orders WHERE order_id = ? AND status_id = 1",
+        [orderId],
+        (checkErr, checkResult) => {
+            if (checkErr) {
+                console.error("Database check error:", checkErr);
+                return res.status(500).json({
+                    success: false,
+                    message: "เกิดข้อผิดพลาดในการตรวจสอบออเดอร์"
+                });
+            }
+
+            if (checkResult.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "ไม่พบออเดอร์ หรือออเดอร์ถูกรับไปแล้ว"
+                });
+            }
+
+            // เพิ่มข้อมูลในตาราง delivery_status_tracking
+            const trackingData = {
+                order_id: orderId,
+                rider_id: userId,
+                status_id: 2,
+                timestamp: new Date()
+            };
+
+            conn.query("INSERT INTO delivery_status_tracking SET ?", trackingData, (trackErr) => {
+                if (trackErr) {
+                    console.error("Tracking insert error:", trackErr);
+                    return res.status(500).json({
+                        success: false,
+                        message: "เกิดข้อผิดพลาดในการบันทึกการติดตาม"
+                    });
+                }
+
+                // อัพเดตสถานะในตาราง delivery_orders
+                conn.query(
+                    "UPDATE delivery_orders SET status_id = 2, updated_at = CURRENT_TIMESTAMP WHERE order_id = ?",
+                    [orderId],
+                    (updateErr) => {
+                        if (updateErr) {
+                            console.error("Order update error:", updateErr);
+                            return res.status(500).json({
+                                success: false,
+                                message: "เกิดข้อผิดพลาดในการอัพเดตสถานะออเดอร์"
+                            });
+                        }
+
+                        res.json({
+                            success: true,
+                            message: "รับออเดอร์สำเร็จ"
+                        });
+                    }
+                );
+            });
+        }
+    );
+});
+
+// API สำหรับอัพเดตสถานะเมื่อรับสินค้าแล้ว (สถานะ 3: กำลังจัดส่ง)
+riderRouter.post("/pickup-order", upload.single('status_image'), (req, res) => {
     const { userId, orderId } = req.body;
 
     if (!req.file) {
-        return res.status(400).json({ success: false, message: "กรุณาอัพโหลดรูปภาพสถานะ" });
+        return res.status(400).json({
+            success: false,
+            message: "กรุณาอัพโหลดรูปภาพสถานะ"
+        });
     }
 
     const dateTime = getCurrentDateTime();
@@ -99,40 +174,77 @@ riderRouter.post("/accept-order", upload.single('status_image'), (req, res) => {
         },
         (error) => {
             console.error("Upload failed:", error);
-            res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการอัพโหลดรูปภาพ" });
+            res.status(500).json({
+                success: false,
+                message: "เกิดข้อผิดพลาดในการอัพโหลดรูปภาพ"
+            });
         },
         () => {
             getDownloadURL(uploadTask.snapshot.ref).then((imageUrl) => {
-                // อัพเดตข้อมูลในตาราง delivery_status_tracking
-                const updateQuery = `
-                    UPDATE delivery_status_tracking 
-                    SET rider_id = ?, status_id = 2, status_image = ?, timestamp = CURRENT_TIMESTAMP
-                    WHERE order_id = ? AND status_id = 1
-                `;
+                // เพิ่มข้อมูลในตาราง delivery_status_tracking สำหรับสถานะ "รับสินค้า" (status_id = 2)
+                const trackingData = {
+                    order_id: orderId,
+                    rider_id: userId,
+                    status_id: 2,
+                    status_image: null,
+                    timestamp: new Date()
+                };
 
-                conn.query(updateQuery, [userId, imageUrl, orderId], (updateErr, updateResult) => {
-                    if (updateErr) {
-                        console.error("Database update error:", updateErr);
-                        return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการอัพเดตฐานข้อมูล" });
+                conn.query("INSERT INTO delivery_status_tracking SET ?", trackingData, (trackErr) => {
+                    if (trackErr) {
+                        console.error("Tracking insert error:", trackErr);
+                        return res.status(500).json({
+                            success: false,
+                            message: "เกิดข้อผิดพลาดในการบันทึกการติดตาม"
+                        });
                     }
 
-                    if (updateResult.affectedRows === 0) {
-                        return res.status(400).json({ success: false, message: "ไม่สามารถรับออเดอร์ได้ หรือออเดอร์ถูกรับไปแล้ว" });
-                    }
+                    // อัพเดตสถานะเป็น "กำลังจัดส่ง" (status_id = 3) หลังจากอัพโหลดรูปภาพ
+                    const updateTrackingData = {
+                        order_id: orderId,
+                        rider_id: userId,
+                        status_id: 3,
+                        status_image: imageUrl,
+                        timestamp: new Date()
+                    };
 
-                    // อัพเดตสถานะในตาราง delivery_orders
-                    conn.query("UPDATE delivery_orders SET status_id = 2 WHERE order_id = ?", [orderId], (orderErr) => {
-                        if (orderErr) {
-                            console.error("Order update error:", orderErr);
-                            return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการอัพเดตสถานะออเดอร์" });
+                    conn.query("INSERT INTO delivery_status_tracking SET ?", updateTrackingData, (updateTrackErr) => {
+                        if (updateTrackErr) {
+                            console.error("Update tracking error:", updateTrackErr);
+                            return res.status(500).json({
+                                success: false,
+                                message: "เกิดข้อผิดพลาดในการอัพเดตการติดตาม"
+                            });
                         }
 
-                        res.json({ success: true, message: "รับออเดอร์และอัพเดตสถานะสำเร็จ", imageUrl });
+                        // อัพเดตสถานะในตาราง delivery_orders เป็น "กำลังจัดส่ง" (status_id = 3)
+                        conn.query(
+                            "UPDATE delivery_orders SET status_id = 3, updated_at = CURRENT_TIMESTAMP WHERE order_id = ?",
+                            [orderId],
+                            (orderErr) => {
+                                if (orderErr) {
+                                    console.error("Order update error:", orderErr);
+                                    return res.status(500).json({
+                                        success: false,
+                                        message: "เกิดข้อผิดพลาดในการอัพเดตสถานะออเดอร์"
+                                    });
+                                }
+
+                                res.json({
+                                    success: true,
+                                    message: "รับออเดอร์และอัพเดตสถานะสำเร็จ",
+                                    imageUrl
+                                });
+                            }
+                        );
                     });
                 });
             }).catch((urlError) => {
                 console.error("Error getting download URL:", urlError);
-                res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการรับ URL รูปภาพ" });
+                res.status(500).json({
+                    success: false,
+                    message: "เกิดข้อผิดพลาดในการรับ URL รูปภาพ"
+                });
             });
         }
     );
