@@ -3,9 +3,9 @@ export interface UserGetResponse {
     username: string;
     phone: string;
     password: string;
-    address: null;
-    car_license: null;
-    type: number;
-    gps_location: null;
-    profile_image: null;
+    address: string | null;
+    car_license: string | null;
+    type: number;  // 1 = ผู้ใช้ทั่วไป, 2 = ไรเดอร์
+    gps_location: string | null;
+    profile_image: string | null;
 }

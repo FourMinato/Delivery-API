@@ -2,7 +2,6 @@ import express, { Request, Response } from "express";
 import { conn } from "../dbconn";
 import mysql from "mysql";
 import multer from "multer";
-import { v4 as uuidv4 } from 'uuid';
 import { initializeApp } from "firebase/app";
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from "firebase/storage";
 import Config from '../api/config/firebase.config';
@@ -69,8 +68,10 @@ router.get("/", (req, res) => {
 });
 
 router.post("/login", (req: Request, res: Response) => {
+    // รับค่าจาก body
     const { phone, password } = req.body;
 
+    // ตรวจสอบว่ามีค่าส่งมาไหม
     if (!phone || !password) {
         return res.status(400).json({
             success: false,
@@ -82,7 +83,7 @@ router.post("/login", (req: Request, res: Response) => {
 
     conn.query(sql, [phone], (err: any, result: UserGetResponse[]) => {
         if (err) {
-            console.error(err);
+            console.error('Database error:', err);
             return res.status(500).json({
                 success: false,
                 message: 'Internal Server Error'
@@ -92,13 +93,12 @@ router.post("/login", (req: Request, res: Response) => {
         if (result.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'ไม่พบผู้ใช้'
+                message: 'ไม่พบบัญชีผู้ใช้นี้ในระบบ'
             });
         }
 
-        const user: UserGetResponse = result[0];
+        const user = result[0];
 
-        // เปรียบเทียบรหัสผ่านโดยตรง
         if (password !== user.password) {
             return res.status(401).json({
                 success: false,
@@ -106,24 +106,32 @@ router.post("/login", (req: Request, res: Response) => {
             });
         }
 
-        // ส่งข้อมูลกลับ
+        const userType = user.type === 1 ? 'ผู้ใช้ทั่วไป' : 'ไรเดอร์';
+
         res.status(200).json({
             success: true,
-            message: 'เข้าสู่ระบบสำเร็จ',
-            data: user
+            message: `เข้าสู่ระบบสำเร็จ (${userType})`,
         });
     });
 });
 
 
-
-// แก้ไข API route สำหรับการลงทะเบียนผู้ใช้ทั่วไป
 router.post("/register", upload.single('profile_image'), async (req, res) => {
     try {
-        const { username, phone, password, address, gps_location } = req.body;
+        const { username, phone, password, confirm_password, address, gps_location } = req.body;
 
-        if (!username || !phone || !password || !address) {
-            return res.status(400).json({ message: 'Username, Phone, Password, and Address are required' });
+        // ตรวจสอบว่าฟิลด์จำเป็นไม่เป็น null และไม่เป็นช่องว่าง
+        if (!username || username.trim() === '' ||
+            !phone || phone.trim() === '' ||
+            !password || password.trim() === '' ||
+            !confirm_password || confirm_password.trim() === '' ||
+            !address || address.trim() === '') {
+            return res.status(400).json({ message: 'Username, Phone, Password, Confirm Password, and Address are required and cannot be empty' });
+        }
+
+        // ตรวจสอบว่ารหัสผ่านและการยืนยันรหัสผ่านตรงกัน
+        if (password !== confirm_password) {
+            return res.status(400).json({ message: 'Password and Confirm Password do not match' });
         }
 
         let profile_image_url = null;
@@ -148,7 +156,7 @@ router.post("/register", upload.single('profile_image'), async (req, res) => {
 
         const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE phone = ?';
 
-        conn.query(checkExisting, [phone], (err, result) => {
+        conn.query(checkExisting, [phone.trim()], (err, result) => {
             if (err) {
                 console.error("Error checking existing user:", err.message);
                 return res.status(500).json({ message: 'Error during user check.' });
@@ -160,7 +168,15 @@ router.post("/register", upload.single('profile_image'), async (req, res) => {
 
             const insert = "INSERT INTO users (username, phone, password, address, gps_location, profile_image, type) VALUES (?,?,?,?,?,?,?)";
 
-            conn.query(insert, [username, phone, password, address, gps_location, profile_image_url, 1], (err, result) => {
+            conn.query(insert, [
+                username.trim(),
+                phone.trim(),
+                password.trim(),
+                address.trim(),
+                gps_location ? gps_location.trim() : null,
+                profile_image_url,
+                1
+            ], (err, result) => {
                 if (err) {
                     console.error("Error during insertion:", err.message);
                     return res.status(500).json({ message: 'Error during insertion.' });
@@ -184,12 +200,23 @@ router.post("/register", upload.single('profile_image'), async (req, res) => {
     }
 });
 
+
 router.post("/register/riders", upload.single('profile_image'), async (req, res) => {
     try {
-        const { username, phone, password, car_license } = req.body;
+        const { username, phone, password, confirm_password, car_license } = req.body;
 
-        if (!username || !phone || !password || !car_license) {
-            return res.status(400).json({ message: 'Username, Phone, Password, and Car License are required' });
+        // ตรวจสอบว่าฟิลด์จำเป็นไม่เป็น null และไม่เป็นช่องว่าง
+        if (!username || username.trim() === '' ||
+            !phone || phone.trim() === '' ||
+            !password || password.trim() === '' ||
+            !confirm_password || confirm_password.trim() === '' ||
+            !car_license || car_license.trim() === '') {
+            return res.status(400).json({ message: 'Username, Phone, Password, Confirm Password, and Car License are required and cannot be empty' });
+        }
+
+        // ตรวจสอบว่ารหัสผ่านและการยืนยันรหัสผ่านตรงกัน
+        if (password !== confirm_password) {
+            return res.status(400).json({ message: 'Password and Confirm Password do not match' });
         }
 
         let profile_image_url = null;
@@ -214,7 +241,7 @@ router.post("/register/riders", upload.single('profile_image'), async (req, res)
 
         const checkExisting = 'SELECT COUNT(*) AS count FROM users WHERE phone = ?';
 
-        conn.query(checkExisting, [phone], (err, result) => {
+        conn.query(checkExisting, [phone.trim()], (err, result) => {
             if (err) {
                 console.error("Error checking existing user:", err.message);
                 return res.status(500).json({ message: 'Error during user check.' });
@@ -226,7 +253,15 @@ router.post("/register/riders", upload.single('profile_image'), async (req, res)
 
             const insert = "INSERT INTO users (username, phone, password, car_license, profile_image, type) VALUES (?,?,?,?,?,?)";
 
-            conn.query(insert, [username, phone, password, car_license, profile_image_url, 2], (err, result) => {
+            //เพิ่ม .trim() เพื่อตัดช่องว่างหน้า-หลังก่อนบันทึกข้อมูล
+            conn.query(insert, [
+                username.trim(),
+                phone.trim(),
+                password.trim(),
+                car_license.trim(),
+                profile_image_url,
+                2
+            ], (err, result) => {
                 if (err) {
                     console.error("Error during insertion:", err.message);
                     return res.status(500).json({ message: 'Error during insertion.' });
@@ -259,7 +294,7 @@ router.post("/register/riders", upload.single('profile_image'), async (req, res)
 router.put("/update/user/:id", upload.single('profile_image'), async (req: Request, res: Response) => {
     try {
         const userId = parseInt(req.params.id);
-        
+
         if (isNaN(userId)) {
             return res.status(400).json({
                 success: false,
@@ -373,7 +408,7 @@ router.put("/update/user/:id", upload.single('profile_image'), async (req: Reque
 router.put("/update/rider/:id", upload.single('profile_image'), async (req: Request, res: Response) => {
     try {
         const riderId = parseInt(req.params.id);
-        
+
         if (isNaN(riderId)) {
             return res.status(400).json({
                 success: false,
