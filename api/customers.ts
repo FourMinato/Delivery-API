@@ -67,6 +67,32 @@ router.get("/", (req, res) => {
 
 });
 
+router.get("/user/:id", (req, res) => {
+    const userId = req.params.id;
+    const sql = "SELECT * FROM users WHERE user_id = ?";
+
+    conn.query(sql, [userId], (err, result) => {
+        if (err) {
+            console.error(err);
+            res.status(500).json({
+                message: 'Internal Server Error'
+            });
+        } else {
+            if (result.length > 0) {
+                res.status(200).json({
+                    success: true,
+                    message: 'Get Data Success',
+                    data: result[0]  // ส่งข้อมูลผู้ใช้คนเดียว
+                });
+            } else {
+                res.status(400).json({
+                    message: 'User not found'
+                });
+            }
+        }
+    });
+});
+
 router.post("/login", (req: Request, res: Response) => {
     // รับค่าจาก body
     const { phone, password } = req.body;
