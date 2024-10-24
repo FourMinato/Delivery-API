@@ -164,7 +164,7 @@ router.post("/register", upload.single('profile_image'), async (req, res) => {
 
         if (req.file) {
             const dateTime = giveCurrrentDateTime();
-            const storageRef = ref(storage, `Profile_Rider/${req.file.originalname + "_" + dateTime}`);
+            const storageRef = ref(storage, `Profile_Users/${req.file.originalname + "_" + dateTime}`);
 
             const metadata = {
                 contentType: req.file.mimetype,
