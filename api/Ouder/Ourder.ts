@@ -127,9 +127,18 @@ router.get("/order-items/:itemId", (req: Request, res: Response) => {
 });
 
 router.post("/order-items", upload.single('item_image'), async (req: Request, res: Response) => {
-    const { item_name, item_description, item_quantity, item_price, sender_id } = req.body;
+    const { item_name, item_description, sender_id } = req.body;
     let item_image_url: string | null = null;
 
+    // ตรวจสอบข้อมูลที่จำเป็น
+    if (!item_name || !item_description || !sender_id) {
+        return res.status(400).json({
+            success: false,
+            message: 'กรุณากรอกข้อมูลให้ครบถ้วน'
+        });
+    }
+
+    // อัพโหลดรูปภาพ (ถ้ามี)
     if (req.file) {
         try {
             const dateTime = getCurrentDateTime();
@@ -143,13 +152,11 @@ router.post("/order-items", upload.single('item_image'), async (req: Request, re
         }
     }
 
-    const newItem: OrderItem = {
+    const newItem = {
         item_name,
         item_description,
-        item_quantity: parseInt(item_quantity),
-        item_price: parseFloat(item_price),
         item_image: item_image_url,
-        sender_id: parseInt(sender_id) 
+        sender_id: parseInt(sender_id)
     };
 
     conn.query("INSERT INTO order_items SET ?", newItem, (err, result: any) => {
@@ -242,10 +249,10 @@ router.post("/create-orders", async (req: Request, res: Response) => {
 router.put("/order-items/:itemId", upload.single('item_image'), async (req: Request, res: Response) => {
     try {
         const itemId = req.params.itemId;
-        const { item_name, item_description, item_quantity, item_price, sender_id } = req.body;
+        const { item_name, item_description, sender_id } = req.body;
 
         // ตรวจสอบข้อมูลที่จำเป็น
-        if (!item_name || !item_description || !item_quantity || !item_price || !sender_id) {
+        if (!item_name || !item_description || !sender_id) {
             return res.status(400).json({
                 success: false,
                 message: 'กรุณากรอกข้อมูลให้ครบถ้วน'
@@ -273,18 +280,15 @@ router.put("/order-items/:itemId", upload.single('item_image'), async (req: Requ
             const oldItem = result[0];
             let item_image_url = oldItem.item_image;
 
-            // ถ้ามีการอัปโหลดรูปภาพใหม่
+            // จัดการรูปภาพใหม่ (ถ้ามี)
             if (req.file) {
                 const dateTime = getCurrentDateTime();
                 const storageRef = ref(storage, `order_item_images/${req.file.originalname + "_" + dateTime}`);
 
-                const metadata = {
-                    contentType: req.file.mimetype,
-                };
-
                 try {
-                    // อัปโหลดรูปภาพใหม่
-                    const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, metadata);
+                    const snapshot = await uploadBytesResumable(storageRef, req.file.buffer, {
+                        contentType: req.file.mimetype,
+                    });
                     const newImageUrl = await getDownloadURL(snapshot.ref);
                     console.log("New item image uploaded successfully. URL:", newImageUrl);
 
@@ -298,7 +302,6 @@ router.put("/order-items/:itemId", upload.single('item_image'), async (req: Requ
                         }
                     }
 
-                    // อัปเดต item_image_url เฉพาะเมื่อการอัปโหลดรูปใหม่สำเร็จ
                     item_image_url = newImageUrl;
                 } catch (uploadError) {
                     console.error("Error uploading new image:", uploadError);
@@ -307,12 +310,10 @@ router.put("/order-items/:itemId", upload.single('item_image'), async (req: Requ
             }
 
             // อัปเดตข้อมูลในฐานข้อมูล
-            const updateItemSql = "UPDATE order_items SET item_name = ?, item_description = ?, item_quantity = ?, item_price = ?, item_image = ?, sender_id = ? WHERE item_id = ?";
+            const updateItemSql = "UPDATE order_items SET item_name = ?, item_description = ?, item_image = ?, sender_id = ? WHERE item_id = ?";
             const updateValues = [
                 item_name,
                 item_description,
-                parseInt(item_quantity),
-                parseFloat(item_price),
                 item_image_url,
                 parseInt(sender_id),
                 itemId
@@ -329,7 +330,7 @@ router.put("/order-items/:itemId", upload.single('item_image'), async (req: Requ
 
                 res.status(200).json({
                     success: true,
-                    message: 'อัปเดตรายการสั่งซื้อสำเร็จ',
+                    message: 'อัปเดตรายการสินค้าสำเร็จ'
                 });
             });
         });
