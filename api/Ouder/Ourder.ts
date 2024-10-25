@@ -191,71 +191,47 @@ router.post("/create-orders", async (req: Request, res: Response) => {
             });
         }
 
-        // ดึงข้อมูลสินค้าจาก item_ids
-        conn.query("SELECT * FROM order_items WHERE item_id IN (?)", [item_ids], (itemErr, items: any[]) => {
-            if (itemErr) {
+        // สร้างออเดอร์ใหม่
+        const newOrder = {
+            sender_id,
+            receiver_phone,
+            item_ids: item_ids[0], // เก็บ item_id แรกตามโครงสร้าง DB
+            status_id: 1
+        };
+
+        // Insert ลงในตาราง delivery_orders
+        conn.query("INSERT INTO delivery_orders SET ?", newOrder, (orderErr, orderResult: any) => {
+            if (orderErr) {
                 return res.status(500).json({
                     success: false,
-                    message: 'เกิดข้อผิดพลาดในการดึงข้อมูลสินค้า'
+                    message: 'เกิดข้อผิดพลาดในการสร้างออเดอร์'
                 });
             }
 
-            if (items.length !== item_ids.length) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'มีรายการสินค้าบางรายการไม่ถูกต้อง'
-                });
-            }
+            const orderId = orderResult.insertId;
 
-            // คำนวณยอดรวมของออเดอร์
-            const total_amount = items.reduce((sum, item) => sum + (item.item_price * item.item_quantity), 0);
-            const total_items = items.reduce((sum, item) => sum + item.item_quantity, 0);
-
-            // สร้างออเดอร์ใหม่
-            const newOrder = {
-                sender_id,
-                receiver_phone,
-                item_ids: item_ids[0], // เก็บ item_id แรกตามโครงสร้าง DB
-                status_id: 1,
-                total_amount,
-                total_items
-            };
-
-            // Insert ลงในตาราง delivery_orders
-            conn.query("INSERT INTO delivery_orders SET ?", newOrder, (orderErr, orderResult: any) => {
-                if (orderErr) {
-                    return res.status(500).json({
-                        success: false,
-                        message: 'เกิดข้อผิดพลาดในการสร้างออเดอร์'
-                    });
-                }
-
-                const orderId = orderResult.insertId;
-
-                // สร้าง status tracking สำหรับออเดอร์ใหม่
-                conn.query(
-                    "INSERT INTO delivery_status_tracking (order_id, status_id) VALUES (?, ?)",
-                    [orderId, 1],
-                    (trackingErr) => {
-                        if (trackingErr) {
-                            return res.status(500).json({
-                                success: false,
-                                message: 'เกิดข้อผิดพลาดในการสร้างสถานะการติดตาม'
-                            });
-                        }
-
-                        res.status(201).json({
-                            success: true,
-                            message: 'สร้างออเดอร์สำเร็จ',
-                            data: {
-                                order_id: orderId,
-                                ...newOrder,
-                                items: items // ส่งข้อมูลสินค้าทั้งหมดกลับไป
-                            }
+            // สร้าง status tracking สำหรับออเดอร์ใหม่
+            conn.query(
+                "INSERT INTO delivery_status_tracking (order_id, status_id) VALUES (?, ?)",
+                [orderId, 1],
+                (trackingErr) => {
+                    if (trackingErr) {
+                        return res.status(500).json({
+                            success: false,
+                            message: 'เกิดข้อผิดพลาดในการสร้างสถานะการติดตาม'
                         });
                     }
-                );
-            });
+
+                    res.status(201).json({
+                        success: true,
+                        message: 'สร้างออเดอร์สำเร็จ',
+                        data: {
+                            order_id: orderId,
+                            ...newOrder
+                        }
+                    });
+                }
+            );
         });
     });
 });
