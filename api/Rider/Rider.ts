@@ -64,14 +64,25 @@ riderRouter.get("/all-riders", (req: Request, res: Response) => {
 // API สำหรับดูรายการออเดอร์ที่ยังไม่มีไรเดอร์รับ
 riderRouter.get("/all-orders", (req: Request, res: Response) => {
     const sql = `
-        SELECT do.*, ds.status_name 
+        SELECT do.*, ds.status_name,
+               sender.username as sender_name, sender.address as sender_address, sender.gps_location as sender_location,
+               receiver.username as receiver_name, receiver.address as receiver_address, receiver.gps_location as receiver_location,
+               oi.item_name, oi.item_description, oi.item_quantity, oi.item_price
         FROM delivery_orders do
         JOIN delivery_status ds ON do.status_id = ds.status_id
+        JOIN users sender ON do.sender_id = sender.user_id
+        JOIN users receiver ON do.receiver_phone = receiver.phone
+        JOIN order_items oi ON do.item_ids = oi.item_id
         WHERE do.status_id = 1
     `;
+
     conn.query(sql, (err, result) => {
         if (err) {
-            return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการดึงข้อมูลออเดอร์" });
+            console.error("Error:", err);
+            return res.status(500).json({
+                success: false,
+                message: "เกิดข้อผิดพลาดในการดึงข้อมูลออเดอร์"
+            });
         }
         res.json({ success: true, data: result });
     });
