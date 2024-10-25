@@ -157,6 +157,43 @@ router.get("/user/:id", (req, res) => {
     });
 });
 
+router.get("/profile/:id", (req: Request, res: Response) => {
+    const riderId = req.params.id;
+    const sql = `
+      SELECT 
+        user_id,
+        username,
+        phone,
+        car_license,
+        profile_image
+      FROM users 
+      WHERE user_id = ? AND type = 2
+    `;
+
+    conn.query(sql, [riderId], (err, result) => {
+        if (err) {
+            console.error("Error fetching rider profile:", err);
+            return res.status(500).json({
+                success: false,
+                message: 'เกิดข้อผิดพลาดในการดึงข้อมูล'
+            });
+        }
+
+        if (result.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'ไม่พบข้อมูลไรเดอร์'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'ดึงข้อมูลไรเดอร์สำเร็จ',
+            data: result[0]
+        });
+    });
+});
+
 
 
 router.post("/login", (req: Request, res: Response) => {
