@@ -64,10 +64,22 @@ riderRouter.get("/all-riders", (req: Request, res: Response) => {
 // API สำหรับดูรายการออเดอร์ที่ยังไม่มีไรเดอร์รับ
 riderRouter.get("/all-orders", (req: Request, res: Response) => {
     const sql = `
-        SELECT do.*, ds.status_name,
-               sender.username as sender_name, sender.address as sender_address, sender.gps_location as sender_location,
-               receiver.username as receiver_name, receiver.address as receiver_address, receiver.gps_location as receiver_location,
-               oi.item_name, oi.item_description
+        SELECT 
+            do.order_id,
+            do.sender_id,
+            do.receiver_phone,
+            do.status_id,
+            ds.status_name,
+            sender.username as sender_name,
+            sender.address as sender_address,
+            sender.gps_location as sender_location,
+            receiver.username as receiver_name,
+            receiver.address as receiver_address,
+            receiver.gps_location as receiver_location,
+            receiver.phone as receiver_phone,
+            oi.item_id,
+            oi.item_name,
+            oi.item_description
         FROM delivery_orders do
         JOIN delivery_status ds ON do.status_id = ds.status_id
         JOIN users sender ON do.sender_id = sender.user_id
@@ -75,13 +87,12 @@ riderRouter.get("/all-orders", (req: Request, res: Response) => {
         LEFT JOIN order_items oi ON do.item_ids = oi.item_id
         WHERE do.status_id = 1
     `;
-
+    
     conn.query(sql, (err, result) => {
         if (err) {
-            console.error("Error:", err);
-            return res.status(500).json({
-                success: false,
-                message: "เกิดข้อผิดพลาดในการดึงข้อมูลออเดอร์"
+            return res.status(500).json({ 
+                success: false, 
+                message: "เกิดข้อผิดพลาดในการดึงข้อมูลออเดอร์" 
             });
         }
         res.json({ success: true, data: result });
