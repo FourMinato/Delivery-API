@@ -75,12 +75,12 @@ riderRouter.get("/all-orders", (req: Request, res: Response) => {
         JOIN order_items oi ON do.item_ids = oi.item_id
         WHERE do.status_id = 1
     `;
-    
+
     conn.query(sql, (err, result) => {
         if (err) {
-            return res.status(500).json({ 
-                success: false, 
-                message: "เกิดข้อผิดพลาดในการดึงข้อมูลออเดอร์" 
+            return res.status(500).json({
+                success: false,
+                message: "เกิดข้อผิดพลาดในการดึงข้อมูลออเดอร์"
             });
         }
         res.json({ success: true, data: result });
@@ -88,7 +88,7 @@ riderRouter.get("/all-orders", (req: Request, res: Response) => {
 });
 
 // API สำหรับไรเดอร์รับออเดอร์ (สถานะ 2: รับสินค้า)
-riderRouter.post("/accept-order", (req, res) => {
+riderRouter.post("/accept-order", (req: Request, res: Response) => {
     const { userId, orderId } = req.body;
 
     if (!userId || !orderId) {
@@ -100,7 +100,7 @@ riderRouter.post("/accept-order", (req, res) => {
 
     // ตรวจสอบว่าออเดอร์มีอยู่จริงและยังไม่ถูกรับ
     conn.query(
-        "SELECT * FROM delivery_orders WHERE order_id = ? AND status_id = 1",
+        "SELECT * FROM delivery_status_tracking WHERE order_id = ? AND status_id = 1",
         [orderId],
         (checkErr, checkResult) => {
             if (checkErr) {
@@ -118,43 +118,47 @@ riderRouter.post("/accept-order", (req, res) => {
                 });
             }
 
-            // เพิ่มข้อมูลในตาราง delivery_status_tracking
-            const trackingData = {
-                order_id: orderId,
-                rider_id: userId,
-                status_id: 2,
-                timestamp: new Date()
-            };
-
-            conn.query("INSERT INTO delivery_status_tracking SET ?", trackingData, (trackErr) => {
-                if (trackErr) {
-                    console.error("Tracking insert error:", trackErr);
-                    return res.status(500).json({
-                        success: false,
-                        message: "เกิดข้อผิดพลาดในการบันทึกการติดตาม"
-                    });
-                }
-
-                // อัพเดตสถานะในตาราง delivery_orders
-                conn.query(
-                    "UPDATE delivery_orders SET status_id = 2, updated_at = CURRENT_TIMESTAMP WHERE order_id = ?",
-                    [orderId],
-                    (updateErr) => {
-                        if (updateErr) {
-                            console.error("Order update error:", updateErr);
-                            return res.status(500).json({
-                                success: false,
-                                message: "เกิดข้อผิดพลาดในการอัพเดตสถานะออเดอร์"
-                            });
-                        }
-
-                        res.json({
-                            success: true,
-                            message: "รับออเดอร์สำเร็จ"
+            // อัพเดตข้อมูลในตาราง delivery_status_tracking
+            conn.query(
+                `UPDATE delivery_status_tracking 
+                 SET status_id = 2, 
+                     rider_id = ?, 
+                     timestamp = CURRENT_TIMESTAMP 
+                 WHERE order_id = ? AND status_id = 1`,
+                [userId, orderId],
+                (trackErr) => {
+                    if (trackErr) {
+                        console.error("Tracking update error:", trackErr);
+                        return res.status(500).json({
+                            success: false,
+                            message: "เกิดข้อผิดพลาดในการอัพเดตสถานะการติดตาม"
                         });
                     }
-                );
-            });
+
+                    // อัพเดตสถานะในตาราง delivery_orders
+                    conn.query(
+                        `UPDATE delivery_orders 
+                         SET status_id = 2, 
+                             updated_at = CURRENT_TIMESTAMP 
+                         WHERE order_id = ?`,
+                        [orderId],
+                        (updateErr) => {
+                            if (updateErr) {
+                                console.error("Order update error:", updateErr);
+                                return res.status(500).json({
+                                    success: false,
+                                    message: "เกิดข้อผิดพลาดในการอัพเดตสถานะออเดอร์"
+                                });
+                            }
+
+                            res.json({
+                                success: true,
+                                message: "รับออเดอร์สำเร็จ"
+                            });
+                        }
+                    );
+                }
+            );
         }
     );
 });
