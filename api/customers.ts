@@ -37,6 +37,70 @@ function giveCurrrentDateTime() {
     return new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
 }
 
+
+router.get("/notuser/:id", (req, res) => {
+    const userId = req.params.id;
+    console.log(`User ID: ${userId}`);  // ตรวจสอบว่าได้ userId จริงๆ
+    const sql = "SELECT * FROM users WHERE user_id != ? and type != 2";
+
+    conn.query(sql, [userId], (err, result) => {
+        if (err) {
+            console.error(err);
+            res.status(500).json({
+                message: 'Internal Server Error'
+            });
+        } else {
+            res.status(200).json({
+                result
+            });
+
+        }
+    });
+});
+
+
+
+router.get("/checkphone/:phone", (req, res) => {
+    const phones = req.params.phone;
+    console.log(`User Phone: ${phones}`);  // ตรวจสอบว่าได้ phone จริงๆ
+    const sql = "SELECT * FROM users WHERE phone LIKE ? AND type != 2"; // แก้ไข SQL
+
+    // สร้าง pattern สำหรับการค้นหา
+    const searchPattern = `%${phones}%`; // สร้าง pattern สำหรับ LIKE
+
+    conn.query(sql, [searchPattern], (err, result) => {
+        if (err) {
+            console.error(err);
+            res.status(500).json({
+                message: 'Internal Server Error'
+            });
+        } else {
+            res.status(200).json({
+                result
+            });
+        }
+    });
+});
+router.get("/starformphone/:phone", (req, res) => {
+    const phoneu = req.params.phone;
+    console.log(`User ID: ${phoneu}`);  // ตรวจสอบว่าได้ userId จริงๆ
+    const sql = "SELECT * FROM users WHERE phone = ?";
+
+    conn.query(sql, [phoneu], (err, result) => {
+        if (err) {
+            console.error(err);
+            res.status(500).json({
+                message: 'Internal Server Error'
+            });
+        } else {
+            res.status(200).json({
+                result
+            });
+
+        }
+    });
+});
+
 router.get("/", (req, res) => {
 
     const sql = "select * from users";
