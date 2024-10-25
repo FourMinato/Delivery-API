@@ -1,6 +1,6 @@
 import express, { Request, Response } from "express";
 import { conn } from "../../dbconn";
-import { OrderResponse, OrderItem } from '../Model/OurderGet';
+import { OrderResponse, OrderItem, OrderDetail } from '../Model/OurderGet';
 
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from "firebase/storage";
 import multer from "multer";
@@ -461,4 +461,106 @@ router.put("/orders/:orderId", upload.single('item_image'), async (req: Request,
         console.error("Error in order update process:", error);
         res.status(500).json({ message: 'Internal server error' });
     }
+});
+
+
+
+// API ดึงออเดอร์ที่เราส่ง (เราเป็นผู้ส่ง)
+router.get("/my-sent-orders/:userId", (req: Request, res: Response) => {
+    const userId = req.params.userId;
+    
+    const sql = `
+        SELECT 
+            do.order_id,
+            oi.item_name,
+            oi.item_description,
+            oi.item_image,
+            ds.status_name,
+            do.created_at,
+            do.updated_at,
+            u_rider.username as rider_name,
+            u_rider.phone as rider_phone,
+            u_receiver.username as other_party_name,
+            u_receiver.phone as other_party_phone
+        FROM delivery_orders do
+        JOIN order_items oi ON do.item_ids = oi.item_id
+        JOIN users u_receiver ON do.receiver_phone = u_receiver.phone
+        JOIN delivery_status ds ON do.status_id = ds.status_id
+        LEFT JOIN delivery_status_tracking dst ON do.order_id = dst.order_id
+        LEFT JOIN users u_rider ON dst.rider_id = u_rider.user_id
+        WHERE do.sender_id = ?
+        ORDER BY do.created_at DESC
+    `;
+
+    conn.query(sql, [userId], (err, results: OrderDetail[]) => {
+        if (err) {
+            console.error("Error fetching sent orders:", err);
+            return res.status(500).json({
+                success: false,
+                message: 'เกิดข้อผิดพลาดในการดึงข้อมูลออเดอร์ที่ส่ง'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: results
+        });
+    });
+});
+
+// API ดึงออเดอร์ที่ส่งมาถึงเรา (เราเป็นผู้รับ)
+router.get("/my-received-orders/:userId", (req: Request, res: Response) => {
+    const userId = req.params.userId;
+
+    // ดึงเบอร์โทรของผู้ใช้ก่อน
+    const getUserPhoneSql = "SELECT phone FROM users WHERE user_id = ?";
+    
+    conn.query(getUserPhoneSql, [userId], (phoneErr, phoneResult) => {
+        if (phoneErr || phoneResult.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'ไม่พบข้อมูลผู้ใช้'
+            });
+        }
+
+        const userPhone = phoneResult[0].phone;
+        
+        const sql = `
+            SELECT 
+                do.order_id,
+                oi.item_name,
+                oi.item_description,
+                oi.item_image,
+                ds.status_name,
+                do.created_at,
+                do.updated_at,
+                u_rider.username as rider_name,
+                u_rider.phone as rider_phone,
+                u_sender.username as other_party_name,
+                u_sender.phone as other_party_phone
+            FROM delivery_orders do
+            JOIN order_items oi ON do.item_ids = oi.item_id
+            JOIN users u_sender ON do.sender_id = u_sender.user_id
+            JOIN delivery_status ds ON do.status_id = ds.status_id
+            LEFT JOIN delivery_status_tracking dst ON do.order_id = dst.order_id
+            LEFT JOIN users u_rider ON dst.rider_id = u_rider.user_id
+            WHERE do.receiver_phone = ?
+            ORDER BY do.created_at DESC
+        `;
+
+        conn.query(sql, [userPhone], (err, results: OrderDetail[]) => {
+            if (err) {
+                console.error("Error fetching received orders:", err);
+                return res.status(500).json({
+                    success: false,
+                    message: 'เกิดข้อผิดพลาดในการดึงข้อมูลออเดอร์ที่ได้รับ'
+                });
+            }
+
+            res.status(200).json({
+                success: true,
+                data: results
+            });
+        });
+    });
 });

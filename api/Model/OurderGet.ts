@@ -24,3 +24,17 @@ export interface OrderResponse extends Omit<OrderCreateRequest, 'items'> {
     created_at: Date;
     updated_at: Date;
 }
+
+export interface OrderDetail {
+    order_id: number;
+    item_name: string;
+    item_description: string;
+    item_image: string;
+    status_name: string;
+    created_at: Date;
+    updated_at: Date;
+    rider_name?: string;
+    rider_phone?: string;
+    other_party_name: string;  // ชื่อของผู้ส่ง/ผู้รับ
+    other_party_phone: string; // เบอร์โทรของผู้ส่ง/ผู้รับ
+}
