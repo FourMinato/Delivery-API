@@ -93,6 +93,8 @@ router.get("/user/:id", (req, res) => {
     });
 });
 
+
+
 router.post("/login", (req: Request, res: Response) => {
     // รับค่าจาก body
     const { phone, password } = req.body;
@@ -137,6 +139,12 @@ router.post("/login", (req: Request, res: Response) => {
         res.status(200).json({
             success: true,
             message: `เข้าสู่ระบบสำเร็จ (${userType})`,
+            userData: {
+                id: user.user_id,          // รหัสผู้ใช้
+                name: user.username,      // ชื่อผู้ใช้
+                phone: user.phone,    // เบอร์โทร
+                userType: user.type    // ประเภทผู้ใช้
+            }
         });
     });
 });
